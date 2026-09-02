@@ -30,7 +30,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⭐ 100 Stars — 9 500 so‘m", callback_data="stars100")],
             [InlineKeyboardButton("⭐ 250 Stars — 23 750 so‘m", callback_data="stars250")],
             [InlineKeyboardButton("⭐ 500 Stars — 47 500 so‘m", callback_data="stars500")],
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="back")]
+ [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="custom_stars")],
+[InlineKeyboardButton("⬅️ Orqaga", callback_data="back")]
         ]
         await query.edit_message_text(
             "⭐ Stars olish\n\nPaketni tanlang:",
