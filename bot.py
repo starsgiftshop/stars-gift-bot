@@ -43,7 +43,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Bu yerda mavjud Giftlar va ularning narxlari chiqadi."
         )
 
-    elif query.data == "premium"
+    elif query.data == "premium":
         await query.edit_message_text(
             "💎 Premium olish\n\n"
             "Premium paket")
