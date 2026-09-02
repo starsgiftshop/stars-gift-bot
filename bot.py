@@ -5,10 +5,14 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
+    MessageHandler,
     ContextTypes,
+    filters,
 )
 
 TOKEN = os.getenv("BOT_TOKEN")
+
+PRICE_PER_STAR = 95
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -48,21 +52,34 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif query.data == "custom_stars":
+        context.user_data["waiting_stars"] = True
+
         await query.edit_message_text(
             "✏️ Nechta Stars olmoqchisiz?\n\n"
+            "Masalan: 500\n"
             "Minimum: 10 Stars"
+        )
+
+    elif query.data.startswith("stars"):
+        amount = int(query.data.replace("stars", ""))
+        price = amount * PRICE_PER_STAR
+
+        await query.edit_message_text(
+            f"⭐ {amount} Stars\n\n"
+            f"💰 Narxi: {price:,} so‘m\n\n"
+            "To‘lov qismi keyingi bosqichda ulanadi."
         )
 
     elif query.data == "gift":
         await query.edit_message_text(
             "🎁 Gift Shop\n\n"
-            "Bu yerda mavjud Giftlar va ularning narxlari chiqadi."
+            "Giftlar bo‘limi."
         )
 
     elif query.data == "premium":
         await query.edit_message_text(
             "💎 Premium olish\n\n"
-            "Premium paket"
+            "Premium paketlar bo‘limi."
         )
 
     elif query.data == "balance":
@@ -87,9 +104,54 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await start(update, context)
 
 
+async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get("waiting_stars"):
+        return
+
+    text = update.message.text.strip()
+
+    if not text.isdigit():
+        await update.message.reply_text(
+            "❌ Faqat raqam kiriting.\nMasalan: 500"
+        )
+        return
+
+    amount = int(text)
+
+    if amount < 10:
+        await update.message.reply_text(
+            "❌ Minimum 10 Stars."
+        )
+        return
+
+    price = amount * PRICE_PER_STAR
+    context.user_data["waiting_stars"] = False
+
+    keyboard = [
+        [InlineKeyboardButton(
+            "💳 To‘lovga o‘tish",
+            callback_data=f"pay_{amount}"
+        )],
+        [InlineKeyboardButton(
+            "◀️ Orqaga",
+            callback_data="stars"
+        )],
+    ]
+
+    await update.message.reply_text(
+        f"⭐ {amount} Stars\n\n"
+        f"💰 Narxi: {price:,} so‘m\n\n"
+        "Miqdor to‘g‘ri bo‘lsa, to‘lovni davom ettiring 👇",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
 application = Application.builder().token(TOKEN).build()
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(button))
+application.add_handler(
+    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_number)
+)
 
 application.run_polling()
