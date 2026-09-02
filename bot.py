@@ -39,11 +39,26 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "stars":
         keyboard = [
-            [InlineKeyboardButton("⭐ 100 Stars — 9 500 so‘m", callback_data="stars100")],
-            [InlineKeyboardButton("⭐ 250 Stars — 23 750 so‘m", callback_data="stars250")],
-            [InlineKeyboardButton("⭐ 500 Stars — 47 500 so‘m", callback_data="stars500")],
-            [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="custom_stars")],
-            [InlineKeyboardButton("◀️ Orqaga", callback_data="back")],
+            [InlineKeyboardButton(
+                "⭐ 100 Stars — 9 500 so‘m",
+                callback_data="stars100"
+            )],
+            [InlineKeyboardButton(
+                "⭐ 250 Stars — 23 750 so‘m",
+                callback_data="stars250"
+            )],
+            [InlineKeyboardButton(
+                "⭐ 500 Stars — 47 500 so‘m",
+                callback_data="stars500"
+            )],
+            [InlineKeyboardButton(
+                "✏️ Boshqa miqdor",
+                callback_data="custom_stars"
+            )],
+            [InlineKeyboardButton(
+                "◀️ Orqaga",
+                callback_data="back"
+            )],
         ]
 
         await query.edit_message_text(
@@ -52,8 +67,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif query.data == "custom_stars":
-        context.user_data["waiting_stars"] = True
-
         await query.edit_message_text(
             "✏️ Nechta Stars olmoqchisiz?\n\n"
             "Masalan: 500\n"
@@ -101,19 +114,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif query.data == "back":
+        await query.message.delete()
         await start(update, context)
 
 
 async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.user_data.get("waiting_stars"):
-        return
-
     text = update.message.text.strip()
 
+    # Raqam bo'lmasa hech narsa qilmaymiz
     if not text.isdigit():
-        await update.message.reply_text(
-            "❌ Faqat raqam kiriting.\nMasalan: 500"
-        )
         return
 
     amount = int(text)
@@ -125,7 +134,6 @@ async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     price = amount * PRICE_PER_STAR
-    context.user_data["waiting_stars"] = False
 
     keyboard = [
         [InlineKeyboardButton(
@@ -150,8 +158,12 @@ application = Application.builder().token(TOKEN).build()
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(button))
+
 application.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_number)
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handle_number
+    )
 )
 
 application.run_polling()
