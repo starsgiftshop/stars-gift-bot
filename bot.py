@@ -43,7 +43,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Bu yerda mavjud Giftlar va ularning narxlari chiqadi."
         )
 
-    elif query.data == "premium":
+    elif query.data == "premium"
         await query.edit_message_text(
             "💎 Premium olish\n\n"
             "Premium paket")
+application = Application.builder().token(TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CallbackQueryHandler(button))
+application.run_polling()
