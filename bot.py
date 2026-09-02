@@ -37,6 +37,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⭐ Stars olish\n\nPaketni tanlang:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+    elif query.data == "custom_stars":
+    await query.edit_message_text(
+        "✏️ Nechta Stars olmoqchisiz?\n\n"
+        "Minimum: 10 Stars"
+    )
 
     elif query.data == "gift":
         await query.edit_message_text(
