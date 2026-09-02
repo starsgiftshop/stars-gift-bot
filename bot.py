@@ -11,7 +11,6 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("BOT_TOKEN")
-
 PRICE_PER_STAR = 95
 
 
@@ -77,40 +76,82 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = int(query.data.replace("stars", ""))
         price = amount * PRICE_PER_STAR
 
+        keyboard = [
+            [InlineKeyboardButton(
+                "💳 To‘lovga o‘tish",
+                callback_data=f"pay_{amount}"
+            )],
+            [InlineKeyboardButton(
+                "◀️ Orqaga",
+                callback_data="stars"
+            )],
+        ]
+
         await query.edit_message_text(
             f"⭐ {amount} Stars\n\n"
             f"💰 Narxi: {price:,} so‘m\n\n"
-            "To‘lov qismi keyingi bosqichda ulanadi."
+            "To‘lov qismi keyingi bosqichda ulanadi.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+    elif query.data.startswith("pay_"):
+        amount = int(query.data.replace("pay_", ""))
+        price = amount * PRICE_PER_STAR
+
+        await query.edit_message_text(
+            f"💳 To‘lov\n\n"
+            f"⭐ Stars: {amount}\n"
+            f"💰 Summa: {price:,} so‘m\n\n"
+            "Avtomatik to‘lov keyingi bosqichda ulanadi."
         )
 
     elif query.data == "gift":
         await query.edit_message_text(
-            "🎁 Gift Shop\n\n"
-            "Giftlar bo‘limi."
+            "🎁 Gift olish\n\n"
+            "Gift bo‘limi tez orada ulanadi.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
+            ]),
         )
 
     elif query.data == "premium":
         await query.edit_message_text(
             "💎 Premium olish\n\n"
-            "Premium paketlar bo‘limi."
+            "Premium paketlar tez orada ulanadi.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
+            ]),
         )
 
     elif query.data == "balance":
         await query.edit_message_text(
             "💰 Balansni to‘ldirish\n\n"
-            "Balans to‘ldirish bo‘limi."
+            "Balans to‘ldirish bo‘limi.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
+            ]),
         )
 
     elif query.data == "profile":
+        user = update.effective_user
+
         await query.edit_message_text(
-            "👤 Profil\n\n"
-            "Profil ma’lumotlari."
+            f"👤 Profil\n\n"
+            f"🆔 ID: {user.id}\n"
+            f"👤 Ism: {user.first_name}\n\n"
+            f"💰 Balans: 0 so‘m",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
+            ]),
         )
 
     elif query.data == "help":
         await query.edit_message_text(
             "🔵 Yordam\n\n"
-            "Savollar bo‘lsa, admin bilan bog‘laning."
+            "Savollar bo‘lsa, admin bilan bog‘laning.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
+            ]),
         )
 
     elif query.data == "back":
@@ -121,7 +162,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
-    # Raqam bo'lmasa hech narsa qilmaymiz
     if not text.isdigit():
         return
 
