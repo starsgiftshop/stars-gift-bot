@@ -1,8 +1,15 @@
 import os
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+)
 
 TOKEN = os.getenv("BOT_TOKEN")
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -11,15 +18,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💎 Premium olish", callback_data="premium")],
         [InlineKeyboardButton("💰 Balansni to‘ldirish", callback_data="balance")],
         [InlineKeyboardButton("👤 Profil", callback_data="profile")],
-        [InlineKeyboardButton("🔵 Yordam", callback_data="help")]
+        [InlineKeyboardButton("🔵 Yordam", callback_data="help")],
     ]
 
     await update.message.reply_text(
-        "🌟 Stars Gift Shop\n\n"
-        "Assalomu alaykum!\n"
+        "⭐ Stars Gift Shop\n\n"
+        "Assalomu alaykum! 👋\n"
         "Kerakli bo‘limni tanlang 👇",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
+
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -30,21 +38,20 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⭐ 100 Stars — 9 500 so‘m", callback_data="stars100")],
             [InlineKeyboardButton("⭐ 250 Stars — 23 750 so‘m", callback_data="stars250")],
             [InlineKeyboardButton("⭐ 500 Stars — 47 500 so‘m", callback_data="stars500")],
- [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="custom_stars")],
-[InlineKeyboardButton("⬅️ Orqaga", callback_data="back")]
+            [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="custom_stars")],
+            [InlineKeyboardButton("◀️ Orqaga", callback_data="back")],
         ]
+
         await query.edit_message_text(
             "⭐ Stars olish\n\nPaketni tanlang:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
-        elif query.data == "custom_stars":
-            await query.edit_message_text(
+
+    elif query.data == "custom_stars":
+        await query.edit_message_text(
             "✏️ Nechta Stars olmoqchisiz?\n\n"
             "Minimum: 10 Stars"
-    )
-    
-        
-    
+        )
 
     elif query.data == "gift":
         await query.edit_message_text(
@@ -55,8 +62,34 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "premium":
         await query.edit_message_text(
             "💎 Premium olish\n\n"
-            "Premium paket")
+            "Premium paket"
+        )
+
+    elif query.data == "balance":
+        await query.edit_message_text(
+            "💰 Balansni to‘ldirish\n\n"
+            "Balans to‘ldirish bo‘limi."
+        )
+
+    elif query.data == "profile":
+        await query.edit_message_text(
+            "👤 Profil\n\n"
+            "Profil ma’lumotlari."
+        )
+
+    elif query.data == "help":
+        await query.edit_message_text(
+            "🔵 Yordam\n\n"
+            "Savollar bo‘lsa, admin bilan bog‘laning."
+        )
+
+    elif query.data == "back":
+        await start(update, context)
+
+
 application = Application.builder().token(TOKEN).build()
+
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(button))
+
 application.run_polling()
