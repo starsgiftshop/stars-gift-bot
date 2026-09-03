@@ -16,7 +16,25 @@ from telegram.ext import (
 TOKEN = os.getenv("BOT_TOKEN")
 DB = "shop.db"
 
-STARS_PACKAGES = [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]
+# =========================
+# SOZLAMALAR
+# =========================
+
+STAR_PRICE = 195
+MIN_CUSTOM_STARS = 10
+MAX_CUSTOM_STARS = 100000
+
+STARS_PACKAGES = [
+    25, 50, 100, 125, 150,
+    175, 200, 300, 400, 500
+]
+
+PREMIUM_PACKAGES = [
+    ("1 oy", 45000),
+    ("3 oy", 164000),
+    ("6 oy", 222000),
+    ("1 yil", 377000),
+]
 
 
 # =========================
@@ -41,12 +59,12 @@ def init_db():
     con.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id TEXT PRIMARY KEY,
-            user_id INTEGER,
-            product TEXT,
-            quantity INTEGER,
-            price INTEGER,
-            status TEXT,
-            created TEXT
+            user_id INTEGER NOT NULL,
+            product TEXT NOT NULL,
+            quantity TEXT,
+            price INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            created TEXT NOT NULL
         )
     """)
 
@@ -59,13 +77,26 @@ def save_user(user_id, name):
 
     con.execute("""
         INSERT INTO users(user_id, name)
-        VALUES(?, ?)
+        VALUES (?, ?)
         ON CONFLICT(user_id)
-        DO UPDATE SET name=excluded.name
+        DO UPDATE SET name = excluded.name
     """, (user_id, name))
 
     con.commit()
     con.close()
+
+
+def get_balance(user_id):
+    con = db()
+
+    row = con.execute(
+        "SELECT balance FROM users WHERE user_id = ?",
+        (user_id,)
+    ).fetchone()
+
+    con.close()
+
+    return row[0] if row else 0
 
 
 def create_order(user_id, product, quantity, price):
@@ -81,7 +112,7 @@ def create_order(user_id, product, quantity, price):
         order_id,
         user_id,
         product,
-        quantity,
+        str(quantity),
         price,
         "Kutilmoqda",
         datetime.now().strftime("%d.%m.%Y %H:%M"),
@@ -99,44 +130,87 @@ def get_orders(user_id):
     rows = con.execute("""
         SELECT id, product, quantity, price, status, created
         FROM orders
-        WHERE user_id=?
+        WHERE user_id = ?
         ORDER BY rowid DESC
         LIMIT 20
     """, (user_id,)).fetchall()
 
     con.close()
+
     return rows
 
 
 # =========================
 # NARX
-# 100 ⭐ = 19 500 SO'M
-# 1 ⭐ = 195 SO'M
 # =========================
 
 def stars_price(stars):
-    return stars * 195
+    return stars * STAR_PRICE
+
+
+def money(number):
+    return f"{number:,}".replace(",", " ")
 
 
 # =========================
-# MENYU
+# ASOSIY MENYU
 # =========================
 
 def menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⭐ Stars olish", callback_data="stars")],
-        [InlineKeyboardButton("🎁 Gift olish", callback_data="gift")],
-        [InlineKeyboardButton("💎 Premium olish", callback_data="premium")],
-        [InlineKeyboardButton("💰 Balansni to‘ldirish", callback_data="balance")],
-        [InlineKeyboardButton("👤 Profil", callback_data="profile")],
-        [InlineKeyboardButton("📋 Buyurtmalarim", callback_data="orders")],
-        [InlineKeyboardButton("🔵 Yordam", callback_data="help")],
+        [
+            InlineKeyboardButton(
+                "⭐ Stars olish",
+                callback_data="stars"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🎁 Gift olish",
+                callback_data="gift"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "💎 Premium olish",
+                callback_data="premium"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "💰 Balansni to‘ldirish",
+                callback_data="balance"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "👤 Profil",
+                callback_data="profile"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📋 Buyurtmalarim",
+                callback_data="orders"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔵 Yordam",
+                callback_data="help"
+            )
+        ],
     ])
 
 
 def back_button(callback="back"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ Orqaga", callback_data=callback)]
+        [
+            InlineKeyboardButton(
+                "◀️ Orqaga",
+                callback_data=callback
+            )
+        ]
     ])
 
 
@@ -163,7 +237,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Assalomu alaykum! 👋\n"
         "Kerakli bo‘limni tanlang 👇",
         parse_mode="HTML",
-        reply_markup=menu(),
+        reply_markup=menu()
     )
 
 
@@ -181,38 +255,34 @@ async def show_stars(query):
 
         buttons.append([
             InlineKeyboardButton(
-                f"⭐ {stars} Stars — {price:,} so‘m".replace(",", " "),
-                callback_data=f"stars:{stars}",
+                f"⭐ {stars} Stars — {money(price)} so‘m",
+                callback_data=f"stars:{stars}"
             )
         ])
 
     buttons.append([
         InlineKeyboardButton(
             "✏️ Boshqa miqdor",
-            callback_data="custom_stars",
+            callback_data="custom_stars"
         )
     ])
 
     buttons.append([
         InlineKeyboardButton(
             "◀️ Orqaga",
-            callback_data="back",
+            callback_data="back"
         )
     ])
 
     await query.edit_message_text(
         "⭐ <b>Stars olish</b>\n\n"
-        "Kerakli miqdorni tanlang 👇\n\n"
         "💵 1 ⭐ = 195 so‘m\n"
-        "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
+        "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>\n\n"
+        "Kerakli miqdorni tanlang 👇",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-
-# =========================
-# BOSHQA MIQDOR
-# =========================
 
 async def custom_stars(query, context):
 
@@ -221,12 +291,12 @@ async def custom_stars(query, context):
     await query.edit_message_text(
         "✏️ <b>Boshqa miqdor</b>\n\n"
         "Nechta Stars kerakligini yozing.\n\n"
-        "🔹 Minimum: <b>10 Stars</b>\n"
-        "🔹 1 ⭐ = <b>195 so‘m</b>\n"
+        f"🔹 Minimum: <b>{MIN_CUSTOM_STARS} Stars</b>\n"
+        "💵 1 ⭐ = <b>195 so‘m</b>\n"
         "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>\n\n"
         "Masalan: <code>350</code>",
         parse_mode="HTML",
-        reply_markup=back_button("stars"),
+        reply_markup=back_button("stars")
     )
 
 
@@ -245,17 +315,17 @@ async def custom_stars_message(update, context):
         )
         return
 
-    if amount < 10:
+    if amount < MIN_CUSTOM_STARS:
 
         await update.message.reply_text(
-            "❌ Minimum 10 Stars."
+            f"❌ Minimum {MIN_CUSTOM_STARS} Stars."
         )
         return
 
-    if amount > 100000:
+    if amount > MAX_CUSTOM_STARS:
 
         await update.message.reply_text(
-            "❌ Maksimum 100 000 Stars."
+            f"❌ Maksimum {MAX_CUSTOM_STARS} Stars."
         )
         return
 
@@ -267,14 +337,14 @@ async def custom_stars_message(update, context):
         update.effective_user.id,
         "Stars",
         amount,
-        price,
+        price
     )
 
     await update.message.reply_text(
         "📦 <b>Buyurtma yaratildi</b>\n\n"
         f"🆔 ID: <code>{order_id}</code>\n"
         f"⭐ Miqdor: <b>{amount} Stars</b>\n"
-        f"💰 Narx: <b>{price:,} so‘m</b>\n\n"
+        f"💰 Narx: <b>{money(price)} so‘m</b>\n\n"
         "📊 Holat: <b>Kutilmoqda</b>\n"
         "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
         parse_mode="HTML",
@@ -282,21 +352,21 @@ async def custom_stars_message(update, context):
             [
                 InlineKeyboardButton(
                     "💳 Sotib olish",
-                    callback_data=f"pay:{order_id}",
+                    callback_data=f"pay:{order_id}"
                 )
             ],
             [
                 InlineKeyboardButton(
                     "◀️ Bosh menyu",
-                    callback_data="back",
+                    callback_data="back"
                 )
-            ],
-        ]),
+            ]
+        ])
     )
 
 
 # =========================
-# GIFTLAR
+# GIFT
 # =========================
 
 async def show_gifts(query, context):
@@ -309,7 +379,7 @@ async def show_gifts(query, context):
 
             await query.edit_message_text(
                 "🎁 Hozircha Gift mavjud emas.",
-                reply_markup=back_button(),
+                reply_markup=back_button()
             )
             return
 
@@ -331,24 +401,25 @@ async def show_gifts(query, context):
             buttons.append([
                 InlineKeyboardButton(
                     f"{emoji} {stars}⭐ — "
-                    f"{price:,} so‘m".replace(",", " "),
-                    callback_data=f"gift:{gift.id}",
+                    f"{money(price)} so‘m",
+                    callback_data=f"gift:{gift.id}"
                 )
             ])
 
         buttons.append([
             InlineKeyboardButton(
                 "◀️ Orqaga",
-                callback_data="back",
+                callback_data="back"
             )
         ])
 
         await query.edit_message_text(
             "🎁 <b>Giftlar</b>\n\n"
-            "Kerakli Giftni tanlang 👇\n\n"
-            "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
+            "💵 1 ⭐ = 195 so‘m\n"
+            "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>\n\n"
+            "Kerakli Giftni tanlang 👇",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
 
     except Exception as e:
@@ -357,13 +428,9 @@ async def show_gifts(query, context):
 
         await query.edit_message_text(
             "❌ Giftlarni yuklashda xatolik.",
-            reply_markup=back_button(),
+            reply_markup=back_button()
         )
 
-
-# =========================
-# GIFT PREVIEW
-# =========================
 
 async def gift_preview(query, context, gift_id):
 
@@ -383,7 +450,7 @@ async def gift_preview(query, context, gift_id):
 
             await query.answer(
                 "Gift topilmadi.",
-                show_alert=True,
+                show_alert=True
             )
             return
 
@@ -401,7 +468,7 @@ async def gift_preview(query, context, gift_id):
         await query.edit_message_text(
             f"{emoji} <b>Gift</b>\n\n"
             f"⭐ Gift qiymati: <b>{stars} Stars</b>\n"
-            f"💰 Sotuv narxi: <b>{price:,} so‘m</b>\n\n"
+            f"💰 Sotuv narxi: <b>{money(price)} so‘m</b>\n\n"
             "⏱️ Bajarilish vaqti:\n"
             "<b>O‘rtacha 30 soniya</b>\n\n"
             "📊 Buyurtma holati:\n"
@@ -411,17 +478,17 @@ async def gift_preview(query, context, gift_id):
                 [
                     InlineKeyboardButton(
                         f"💳 Sotib olish — "
-                        f"{price:,} so‘m".replace(",", " "),
-                        callback_data=f"buygift:{selected.id}",
+                        f"{money(price)} so‘m",
+                        callback_data=f"buygift:{selected.id}"
                     )
                 ],
                 [
                     InlineKeyboardButton(
                         "◀️ Giftlar",
-                        callback_data="gift",
+                        callback_data="gift"
                     )
-                ],
-            ]),
+                ]
+            ])
         )
 
     except Exception as e:
@@ -430,8 +497,155 @@ async def gift_preview(query, context, gift_id):
 
         await query.answer(
             "❌ Giftni ochishda xatolik.",
-            show_alert=True,
+            show_alert=True
         )
+
+
+# =========================
+# PREMIUM
+# =========================
+
+async def show_premium(query):
+
+    buttons = []
+
+    for name, price in PREMIUM_PACKAGES:
+
+        buttons.append([
+            InlineKeyboardButton(
+                f"💎 {name} — {money(price)} so‘m",
+                callback_data=f"premium:{name}"
+            )
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(
+            "◀️ Orqaga",
+            callback_data="back"
+        )
+    ])
+
+    await query.edit_message_text(
+        "💎 <b>Telegram Premium</b>\n\n"
+        "Kerakli paketni tanlang 👇\n\n"
+        "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+async def premium_preview(query, package):
+
+    price = None
+
+    for name, package_price in PREMIUM_PACKAGES:
+
+        if name == package:
+            price = package_price
+            break
+
+    if price is None:
+
+        await query.answer(
+            "Paket topilmadi.",
+            show_alert=True
+        )
+        return
+
+    await query.edit_message_text(
+        "💎 <b>Premium buyurtmasi</b>\n\n"
+        f"📦 Paket: <b>{package}</b>\n"
+        f"💰 Narx: <b>{money(price)} so‘m</b>\n\n"
+        "⏱️ Bajarilish vaqti:\n"
+        "<b>O‘rtacha 30 soniya</b>\n\n"
+        "📊 Holat: <b>Kutilmoqda</b>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "💳 Sotib olish",
+                    callback_data=f"buy_premium:{package}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "◀️ Premium",
+                    callback_data="premium"
+                )
+            ]
+        ])
+    )
+
+
+# =========================
+# BALANS
+# =========================
+
+async def show_balance(query):
+
+    await query.edit_message_text(
+        "💰 <b>Balansni to‘ldirish</b>\n\n"
+        "To‘lov usulini tanlang 👇",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "🟢 Payme",
+                    callback_data="payme"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔵 Click",
+                    callback_data="click"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "💳 Uzcard",
+                    callback_data="uzcard"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "💳 Humo",
+                    callback_data="humo"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "◀️ Orqaga",
+                    callback_data="back"
+                )
+            ]
+        ])
+    )
+
+
+async def payment_method(query, method):
+
+    names = {
+        "payme": "🟢 Payme",
+        "click": "🔵 Click",
+        "uzcard": "💳 Uzcard",
+        "humo": "💳 Humo",
+    }
+
+    name = names.get(method, "To‘lov")
+
+    await query.edit_message_text(
+        f"{name}\n\n"
+        "💰 To‘lov tizimi tayyorlanmoqda.\n\n"
+        "⚠️ Avtomatik to‘lov API ulanishi keyingi bosqichda qo‘shiladi.",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "◀️ To‘lov usullari",
+                    callback_data="balance"
+                )
+            ]
+        ])
+    )
 
 
 # =========================
@@ -448,7 +662,7 @@ async def show_orders(query):
             "📋 <b>Buyurtmalarim</b>\n\n"
             "Hozircha buyurtmalar yo‘q.",
             parse_mode="HTML",
-            reply_markup=back_button(),
+            reply_markup=back_button()
         )
         return
 
@@ -462,17 +676,68 @@ async def show_orders(query):
             f"🆔 <code>{order_id}</code>\n"
             f"📦 {product}\n"
             f"⭐ {quantity}\n"
-            f"💰 {price:,} so‘m\n"
+            f"💰 {money(price)} so‘m\n"
             f"📊 {status}\n"
-            f"⏱️ Bajarilish: <b>o‘rtacha 30 soniya</b>\n"
+            "⏱️ Bajarilish: <b>o‘rtacha 30 soniya</b>\n"
             f"🕐 {created}\n"
             "────────────\n"
         )
 
     await query.edit_message_text(
-        text.replace(",", " "),
+        text,
         parse_mode="HTML",
-        reply_markup=back_button(),
+        reply_markup=back_button()
+    )
+
+
+# =========================
+# PROFIL
+# =========================
+
+async def show_profile(query):
+
+    user = query.from_user
+
+    orders = get_orders(user.id)
+    balance = get_balance(user.id)
+
+    await query.edit_message_text(
+        "👤 <b>Profil</b>\n\n"
+        f"👤 Ism: {user.first_name}\n"
+        f"🆔 ID: <code>{user.id}</code>\n"
+        f"📋 Buyurtmalar: <b>{len(orders)}</b>\n"
+        f"💰 Balans: <b>{money(balance)} so‘m</b>",
+        parse_mode="HTML",
+        reply_markup=back_button()
+    )
+
+
+# =========================
+# YORDAM
+# =========================
+
+async def show_help(query):
+
+    await query.edit_message_text(
+        "🔵 <b>Yordam</b>\n\n"
+        "Savol yoki muammo bo‘lsa administrator bilan bog‘laning.\n\n"
+        "👨‍💻 Administrator:\n"
+        "@Shamsbekman",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "👨‍💻 Administrator bilan bog‘lanish",
+                    url="https://t.me/Shamsbekman"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "◀️ Orqaga",
+                    callback_data="back"
+                )
+            ]
+        ])
     )
 
 
@@ -480,7 +745,7 @@ async def show_orders(query):
 # BUTTONLAR
 # =========================
 
-async def button(update: Update, context):
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     data = query.data or ""
@@ -498,7 +763,7 @@ async def button(update: Update, context):
             "🎁 <b>Stars Gift Shop</b>\n\n"
             "Kerakli bo‘limni tanlang 👇",
             parse_mode="HTML",
-            reply_markup=menu(),
+            reply_markup=menu()
         )
 
     elif data == "stars":
@@ -519,14 +784,14 @@ async def button(update: Update, context):
             query.from_user.id,
             "Stars",
             amount,
-            price,
+            price
         )
 
         await query.edit_message_text(
             "📦 <b>Stars buyurtmasi</b>\n\n"
             f"🆔 ID: <code>{order_id}</code>\n"
             f"⭐ Miqdor: <b>{amount} Stars</b>\n"
-            f"💰 Narx: <b>{price:,} so‘m</b>\n\n"
+            f"💰 Narx: <b>{money(price)} so‘m</b>\n\n"
             "📊 Holat: <b>Kutilmoqda</b>\n"
             "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
             parse_mode="HTML",
@@ -534,23 +799,23 @@ async def button(update: Update, context):
                 [
                     InlineKeyboardButton(
                         "💳 Sotib olish",
-                        callback_data=f"pay:{order_id}",
+                        callback_data=f"pay:{order_id}"
                     )
                 ],
                 [
                     InlineKeyboardButton(
                         "◀️ Stars",
-                        callback_data="stars",
+                        callback_data="stars"
                     )
-                ],
-            ]),
+                ]
+            ])
         )
 
     elif data.startswith("pay:"):
 
         await query.answer(
             "💳 To‘lov tizimi keyingi bosqichda ulanadi.",
-            show_alert=True,
+            show_alert=True
         )
 
     elif data == "gift":
@@ -566,55 +831,44 @@ async def button(update: Update, context):
 
         await query.answer(
             "💳 To‘lov tizimi keyingi bosqichda ulanadi.",
-            show_alert=True,
+            show_alert=True
         )
+
+    elif data == "premium":
+
+        await show_premium(query)
+
+    elif data.startswith("premium:"):
+
+        package = data.split(":", 1)[1]
+        await premium_preview(query, package)
+
+    elif data.startswith("buy_premium:"):
+
+        await query.answer(
+            "💳 To‘lov tizimi keyingi bosqichda ulanadi.",
+            show_alert=True
+        )
+
+    elif data == "balance":
+
+        await show_balance(query)
+
+    elif data in ("payme", "click", "uzcard", "humo"):
+
+        await payment_method(query, data)
 
     elif data == "orders":
 
         await show_orders(query)
 
-    elif data == "premium":
-
-        await query.edit_message_text(
-            "💎 <b>Premium olish</b>\n\n"
-            "Premium paketlari tez orada ulanadi.\n\n"
-            "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
-            parse_mode="HTML",
-            reply_markup=back_button(),
-        )
-
-    elif data == "balance":
-
-        await query.edit_message_text(
-            "💰 <b>Balansni to‘ldirish</b>\n\n"
-            "Click to‘lovi keyingi bosqichda ulanadi.",
-            parse_mode="HTML",
-            reply_markup=back_button(),
-        )
-
     elif data == "profile":
 
-        user = query.from_user
-        orders = get_orders(user.id)
-
-        await query.edit_message_text(
-            "👤 <b>Profil</b>\n\n"
-            f"👤 Ism: {user.first_name}\n"
-            f"🆔 ID: <code>{user.id}</code>\n"
-            f"📋 Buyurtmalar: <b>{len(orders)}</b>\n"
-            "💰 Balans: <b>0 so‘m</b>",
-            parse_mode="HTML",
-            reply_markup=back_button(),
-        )
+        await show_profile(query)
 
     elif data == "help":
 
-        await query.edit_message_text(
-            "🔵 <b>Yordam</b>\n\n"
-            "Muammo bo‘lsa administrator bilan bog‘laning.",
-            parse_mode="HTML",
-            reply_markup=back_button(),
-        )
+        await show_help(query)
 
 
 # =========================
@@ -626,23 +880,4 @@ if not TOKEN:
 
 init_db()
 
-application = Application.builder().token(TOKEN).build()
-
-application.add_handler(
-    CommandHandler("start", start)
-)
-
-application.add_handler(
-    MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        custom_stars_message,
-    )
-)
-
-application.add_handler(
-    CallbackQueryHandler(button)
-)
-
-application.run_polling(
-    drop_pending_updates=True
-    )
+application = Application.builder
