@@ -8,33 +8,26 @@ from telegram import (
     BotCommand,
     MenuButtonCommands,
 )
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN = "@Shamsbekman"
 
 STAR_PRICE = 195
-
 PREMIUM = [
     ("1 oy", 45000),
     ("3 oy", 164000),
     ("6 oy", 222000),
     ("12 oy", 377000),
 ]
-
 TOPUPS = [10000, 20000, 50000, 100000, 200000, 500000]
 
-DB_FILE = "stargift_final.db"
+DB_FILE = "stargift_modern.db"
 START_IMAGE = "stargift_start.png"
 
 
-def money(amount):
-    return f"{int(amount):,}".replace(",", " ")
+def money(n):
+    return f"{int(n):,}".replace(",", " ")
 
 
 def db():
@@ -53,164 +46,174 @@ def db():
     return con
 
 
-def ensure_user(user_id):
+def ensure_user(uid):
     con = db()
-    con.execute(
-        "INSERT OR IGNORE INTO users(user_id,balance) VALUES(?,0)",
-        (user_id,),
-    )
+    con.execute("INSERT OR IGNORE INTO users(user_id,balance) VALUES(?,0)", (uid,))
     con.commit()
     con.close()
 
 
-def balance(user_id):
-    ensure_user(user_id)
+def get_balance(uid):
+    ensure_user(uid)
     con = db()
-    row = con.execute(
-        "SELECT balance FROM users WHERE user_id=?",
-        (user_id,),
-    ).fetchone()
+    row = con.execute("SELECT balance FROM users WHERE user_id=?", (uid,)).fetchone()
     con.close()
     return row[0] if row else 0
 
 
-def order(user_id, item, amount):
+def has_orders(uid):
+    con = db()
+    row = con.execute("SELECT 1 FROM orders WHERE user_id=? LIMIT 1", (uid,)).fetchone()
+    con.close()
+    return row is not None
+
+
+def create_order(uid, item, amount):
     con = db()
     cur = con.execute(
         "INSERT INTO orders(user_id,item,amount,status) VALUES(?,?,?,'pending')",
-        (user_id, item, amount),
+        (uid, item, amount),
     )
     con.commit()
-    n = cur.lastrowid
+    oid = cur.lastrowid
     con.close()
-    return n
+    return oid
 
 
-def home_keyboard():
-    return InlineKeyboardMarkup([
+def home_keyboard(uid):
+    rows = [
         [
-            InlineKeyboardButton("⭐ Yulduzlar", callback_data="stars"),
+            InlineKeyboardButton("🌟 Yulduzlar", callback_data="stars"),
             InlineKeyboardButton("🎁 Sovg'alar", callback_data="gifts"),
         ],
         [
             InlineKeyboardButton("💎 Premium", callback_data="premium"),
-            InlineKeyboardButton("💰 Balansim", callback_data="balance"),
+            InlineKeyboardButton("💳 Hisob", callback_data="topup"),
         ],
         [
-            InlineKeyboardButton("➕ Hisob to'ldirish", callback_data="topup"),
-            InlineKeyboardButton("👤 Profilim", callback_data="profile"),
+            InlineKeyboardButton("👤 Profil", callback_data="profile"),
+            InlineKeyboardButton("💰 Balans", callback_data="balance"),
         ],
         [
-            InlineKeyboardButton("🔵 Yordam", callback_data="help"),
-            InlineKeyboardButton("ℹ️ Ma'lumot", callback_data="info"),
+            InlineKeyboardButton("🛟 Yordam", callback_data="help"),
+            InlineKeyboardButton("✦ Biz haqimizda", callback_data="info"),
         ],
-    ])
+    ]
+    # Buyurtmalar tugmasi faqat kamida bitta buyurtma bo'lsa chiqadi.
+    if has_orders(uid):
+        rows.insert(3, [
+            InlineKeyboardButton("📦 Buyurtmalarim", callback_data="orders")
+        ])
+    return InlineKeyboardMarkup(rows)
 
 
-def back_keyboard():
+def back(uid):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")]
+        [InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")]
     ])
-
-
-async def replace_message(message, text, markup=None):
-    """Works for both normal text messages and the photo sent by /start."""
-    try:
-        await message.edit_text(text, reply_markup=markup)
-        return
-    except Exception:
-        pass
-
-    try:
-        await message.edit_caption(caption=text, reply_markup=markup)
-        return
-    except Exception:
-        pass
-
-    await message.reply_text(text, reply_markup=markup)
 
 
 async def setup(app):
+    # Telegramning doimiy menyu belgisi: faqat komandalar.
     await app.bot.set_my_commands([
         BotCommand("start", "Bosh sahifa"),
-        BotCommand("services", "Bo'limlar"),
-        BotCommand("balance", "Balansim"),
+        BotCommand("services", "Xizmatlar"),
+        BotCommand("balance", "Balans"),
         BotCommand("orders", "Buyurtmalarim"),
         BotCommand("help", "Yordam"),
     ])
     await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
 
+async def remove_old_keyboard(update):
+    # Avvalgi ReplyKeyboard bo'lsa olib tashlaydi.
+    if update.message:
+        try:
+            m = await update.message.reply_text("\u2063", reply_markup=ReplyKeyboardRemove())
+            try:
+                await m.delete()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    ensure_user(user.id)
+    uid = update.effective_user.id
+    ensure_user(uid)
+    await remove_old_keyboard(update)
 
     text = (
-        "✦ STARGIFT SHOP ✦\n\n"
-        "Xush kelibsiz! 🌟\n"
-        "⭐ Yulduzlar  •  🎁 Sovg'alar  •  💎 Premium\n\n"
-        "⚡ Tezkor  •  🔐 Ishonchli  •  💳 So'mda\n"
+        "✦  S T A R G I F T  S H O P  ✦\n\n"
+        "Assalomu alaykum! 👋\n"
+        "Raqamli sovg'alar va Premium xizmatlari bir joyda.\n\n"
+        "🌟 Yulduzlar   •   🎁 Sovg'alar   •   💎 Premium\n"
+        "⚡ Tezkor xizmat   •   🔐 Ishonchli   •   💳 So'mda\n"
         "⏱ O'rtacha bajarilish: 30 soniya\n\n"
-        "Kerakli bo'limni tanlang:"
+        "Quyidan kerakli bo'limni tanlang:"
     )
-
-    # Eski Reply Keyboard bo'lsa, shu bilan olib tashlanadi.
-    remove = ReplyKeyboardRemove()
+    markup = home_keyboard(uid)
 
     if update.message:
         if os.path.isfile(START_IMAGE):
-            with open(START_IMAGE, "rb") as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=text,
-                    reply_markup=home_keyboard(),
-                )
-        else:
-            await update.message.reply_text(
-                text,
-                reply_markup=home_keyboard(),
-            )
-        # Telegram eski Reply Keyboardni keyingi xabarda olib tashlaydi.
-        await update.message.reply_text(
-            " ",
-            reply_markup=remove,
-        )
+            try:
+                with open(START_IMAGE, "rb") as photo:
+                    await update.message.reply_photo(
+                        photo=photo, caption=text, reply_markup=markup
+                    )
+                    return
+            except Exception as e:
+                print("START IMAGE ERROR:", repr(e))
+        await update.message.reply_text(text, reply_markup=markup)
 
 
-async def services(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def services(update, context):
+    await start(update, context)
+
+
+async def balance_command(update, context):
+    uid = update.effective_user.id
     await update.message.reply_text(
-        "✦ STARGIFT SHOP ✦\n\nKerakli bo'limni tanlang:",
-        reply_markup=home_keyboard(),
-    )
-    await update.message.reply_text(" ", reply_markup=ReplyKeyboardRemove())
-
-
-async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"💰 BALANSIM\n\nBalans: {money(balance(update.effective_user.id))} so'm",
-        reply_markup=back_keyboard(),
+        f"💰 BALANS\n\n"
+        f"Joriy balans: {money(get_balance(uid))} so'm",
+        reply_markup=back(uid),
     )
 
 
-async def orders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def orders_command(update, context):
     await show_orders(update.message, update.effective_user.id)
 
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def help_command(update, context):
+    uid = update.effective_user.id
     await update.message.reply_text(
-        f"🔵 YORDAM\n\nAdministrator: {ADMIN}\n\n"
+        f"🛟 YORDAM\n\n"
+        f"Administrator: {ADMIN}\n\n"
         "Savol yoki muammo bo'lsa yozing.\n"
         "⏱ O'rtacha javob: 30 soniya.",
-        reply_markup=back_keyboard(),
+        reply_markup=back(uid),
     )
 
 
-async def show_orders(message, user_id):
+async def safe_edit(message, text, markup):
+    # Photo xabarini edit_text qila olmaydi; captionga o'tadi.
+    try:
+        if message.photo:
+            await message.edit_caption(caption=text, reply_markup=markup)
+        else:
+            await message.edit_text(text, reply_markup=markup)
+    except Exception as e:
+        # Eski xabar o'zgartirib bo'lmasa, yangi xabar ochiladi.
+        print("EDIT FALLBACK:", repr(e))
+        await message.reply_text(text, reply_markup=markup)
+
+
+async def show_orders(message, uid):
     con = db()
     rows = con.execute(
         "SELECT id,item,amount,status FROM orders "
         "WHERE user_id=? ORDER BY id DESC LIMIT 30",
-        (user_id,),
+        (uid,),
     ).fetchall()
     con.close()
 
@@ -218,7 +221,7 @@ async def show_orders(message, user_id):
         text = (
             "📦 BUYURTMALARIM\n\n"
             "Hozircha buyurtma bermagansiz. 😊\n\n"
-            "Buyurtma berganingizdan keyin shu yerda ko'rinadi."
+            "Buyurtma berganingizdan keyin bu bo'lim avtomatik paydo bo'ladi."
         )
     else:
         text = "📦 BUYURTMALARIM\n\n"
@@ -230,291 +233,295 @@ async def show_orders(message, user_id):
                 "cancelled": "❌ Bekor qilingan",
             }.get(status, status)
             text += (
-                f"№ {oid}\n"
-                f"• {item}\n"
-                f"• {money(amount)} so'm\n"
-                f"• {st}\n\n"
+                f"№ {oid}  •  {st}\n"
+                f"🛍 {item}\n"
+                f"💳 {money(amount)} so'm\n\n"
             )
 
-    await replace_message(message, text, back_keyboard())
+    await safe_edit(message, text, back(uid))
 
 
-async def stars_page(message):
-    packages = [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]
+async def stars_page(message, uid):
+    packs = [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]
     rows = []
-    for i in range(0, len(packages), 2):
-        row = []
-        for count in packages[i:i + 2]:
-            row.append(InlineKeyboardButton(
-                f"⭐ {count} • {money(count * STAR_PRICE)} so'm",
-                callback_data=f"star:{count}",
-            ))
-        rows.append(row)
-    rows.append([InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")])
-    await replace_message(
+    for i in range(0, len(packs), 2):
+        rows.append([
+            InlineKeyboardButton(
+                f"🌟 {n}  •  {money(n * STAR_PRICE)} so'm",
+                callback_data=f"star:{n}",
+            )
+            for n in packs[i:i + 2]
+        ])
+    rows.append([InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")])
+    await safe_edit(
         message,
-        "⭐ YULDUZLAR\n\n1 ⭐ = 195 so'm\nPaketni tanlang:",
+        "🌟 YULDUZLAR\n\n"
+        "1 🌟 = 195 so'm\n\n"
+        "Paketni tanlang:",
         InlineKeyboardMarkup(rows),
     )
 
 
-async def premium_page(message):
+async def premium_page(message, uid):
     rows = []
     for i in range(0, len(PREMIUM), 2):
-        row = []
-        for index in range(i, min(i + 2, len(PREMIUM))):
-            name, price = PREMIUM[index]
-            row.append(InlineKeyboardButton(
-                f"💎 {name} • {money(price)} so'm",
-                callback_data=f"prem:{index}",
-            ))
-        rows.append(row)
-    rows.append([InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")])
-    await replace_message(
+        rows.append([
+            InlineKeyboardButton(
+                f"💎 {name}  •  {money(price)} so'm",
+                callback_data=f"prem:{i+j}",
+            )
+            for j, (name, price) in enumerate(PREMIUM[i:i + 2])
+        ])
+    rows.append([InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")])
+    await safe_edit(
         message,
-        "💎 PREMIUM\n\nMuddatni tanlang:",
+        "💎 PREMIUM\n\n"
+        "Kerakli muddatni tanlang:",
         InlineKeyboardMarkup(rows),
     )
 
 
-async def topup_page(message):
+async def topup_page(message, uid):
     rows = []
     for i in range(0, len(TOPUPS), 2):
-        row = []
-        for amount in TOPUPS[i:i + 2]:
-            row.append(InlineKeyboardButton(
-                f"💳 {money(amount)} so'm",
-                callback_data=f"top:{amount}",
-            ))
-        rows.append(row)
-    rows.append([InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")])
-    await replace_message(
+        rows.append([
+            InlineKeyboardButton(
+                f"💳 {money(n)} so'm",
+                callback_data=f"top:{n}",
+            )
+            for n in TOPUPS[i:i + 2]
+        ])
+    rows.append([InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")])
+    await safe_edit(
         message,
-        "➕ HISOB TO'LDIRISH\n\nSummani tanlang.\nTo'lovlar so'mda:",
+        "💳 HISOB TO'LDIRISH\n\n"
+        "Kerakli summani tanlang.\n"
+        "Barcha narxlar so'mda.",
         InlineKeyboardMarkup(rows),
     )
 
 
-async def gifts_page(message, context):
+async def gifts_page(message, context, uid):
     try:
         result = await context.bot.get_available_gifts()
         gifts = list(result.gifts)
     except Exception as e:
         print("GIFTS ERROR:", repr(e))
-        await replace_message(
+        await safe_edit(
             message,
-            "🎁 SOVG'ALAR\n\nSovg'alarni olishda xatolik yuz berdi.",
-            back_keyboard(),
+            "🎁 SOVG'ALAR\n\n"
+            "Sovg'alar ro'yxatini olishda xatolik yuz berdi.",
+            back(uid),
         )
         return
 
     if not gifts:
-        await replace_message(
+        await safe_edit(
             message,
             "🎁 SOVG'ALAR\n\nHozircha mavjud sovg'a yo'q.",
-            back_keyboard(),
+            back(uid),
         )
         return
 
     rows = []
-    for i in range(0, min(40, len(gifts)), 2):
+    for i in range(0, min(len(gifts), 40), 2):
         row = []
         for gift in gifts[i:i + 2]:
             emoji = getattr(gift.sticker, "emoji", None) or "🎁"
             price = gift.star_count * STAR_PRICE
             row.append(InlineKeyboardButton(
-                f"{emoji} {gift.star_count}⭐ • {money(price)} so'm",
+                f"{emoji} {gift.star_count}🌟\n{money(price)} so'm",
                 callback_data=f"gift:{gift.id}",
             ))
         rows.append(row)
 
-    rows.append([InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")])
+    rows.append([InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")])
 
-    await replace_message(
+    await safe_edit(
         message,
         "🎁 SOVG'ALAR\n\n"
-        "Quyidagi sovg'alardan birini tanlang.\n"
-        "Tanlaganda haqiqiy Telegram gift rasmi chiqadi:",
+        "Har bir tanlovda haqiqiy Telegram sovg'a rasmi/stickeri ko'rsatiladi.\n\n"
+        "Sovg'ani tanlang:",
         InlineKeyboardMarkup(rows),
     )
 
 
 async def profile_page(message, user):
+    uid = user.id
     username = f"@{user.username}" if user.username else "username yo'q"
-    await replace_message(
+    await safe_edit(
         message,
-        "👤 PROFILIM\n\n"
+        "👤 PROFIL\n\n"
         f"Username: {username}\n"
-        f"ID: {user.id}\n"
-        f"💰 Balans: {money(balance(user.id))} so'm",
-        back_keyboard(),
+        f"ID: {uid}\n"
+        f"💰 Balans: {money(get_balance(uid))} so'm",
+        back(uid),
     )
 
 
-async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
+async def callback(update, context):
+    q = update.callback_query
     try:
-        await query.answer()
+        await q.answer()
     except Exception:
         pass
 
-    data = query.data or ""
-    user = query.from_user
-    ensure_user(user.id)
+    data = q.data or ""
+    uid = q.from_user.id
+    ensure_user(uid)
 
     try:
         if data == "home":
-            await replace_message(
-                query.message,
-                "✦ STARGIFT SHOP ✦\n\n"
-                "⭐ Yulduzlar • 🎁 Sovg'alar • 💎 Premium\n\n"
-                "Kerakli bo'limni tanlang:",
-                home_keyboard(),
+            await safe_edit(
+                q.message,
+                "✦  S T A R G I F T  S H O P  ✦\n\n"
+                "Kerakli bo'limni tanlang:\n\n"
+                "🌟 Yulduzlar  •  🎁 Sovg'alar  •  💎 Premium\n"
+                "💳 To'lovlar so'mda.",
+                home_keyboard(uid),
             )
 
         elif data == "stars":
-            await stars_page(query.message)
+            await stars_page(q.message, uid)
 
         elif data == "gifts":
-            await gifts_page(query.message, context)
+            await gifts_page(q.message, context, uid)
 
         elif data == "premium":
-            await premium_page(query.message)
+            await premium_page(q.message, uid)
 
         elif data == "balance":
-            await replace_message(
-                query.message,
-                f"💰 BALANSIM\n\nBalans: {money(balance(user.id))} so'm",
-                back_keyboard(),
+            await safe_edit(
+                q.message,
+                f"💰 BALANS\n\nJoriy balans: {money(get_balance(uid))} so'm",
+                back(uid),
             )
 
         elif data == "topup":
-            await topup_page(query.message)
+            await topup_page(q.message, uid)
 
         elif data == "orders":
-            await show_orders(query.message, user.id)
+            await show_orders(q.message, uid)
 
         elif data == "profile":
-            await profile_page(query.message, user)
+            await profile_page(q.message, q.from_user)
 
         elif data == "help":
-            await replace_message(
-                query.message,
-                f"🔵 YORDAM\n\nAdministrator: {ADMIN}\n\n"
+            await safe_edit(
+                q.message,
+                f"🛟 YORDAM\n\nAdministrator: {ADMIN}\n\n"
                 "Savol yoki muammo bo'lsa yozing.",
-                back_keyboard(),
+                back(uid),
             )
 
         elif data == "info":
-            await replace_message(
-                query.message,
-                "ℹ️ MA'LUMOT\n\n"
-                "✦ STARGIFT SHOP\n"
-                "⭐ Yulduzlar\n"
+            await safe_edit(
+                q.message,
+                "✦ STARGIFT SHOP\n\n"
+                "🌟 Yulduzlar\n"
                 "🎁 Telegram Sovg'alar\n"
                 "💎 Premium\n\n"
                 "💳 Narxlar so'mda\n"
                 "⏱ O'rtacha bajarilish: 30 soniya",
-                back_keyboard(),
+                back(uid),
             )
 
         elif data.startswith("star:"):
-            count = int(data.split(":", 1)[1])
-            amount = count * STAR_PRICE
-            oid = order(user.id, f"{count} Stars", amount)
-            await replace_message(
-                query.message,
-                "⭐ BUYURTMA\n\n"
-                f"{count} ⭐\n"
-                f"Narx: {money(amount)} so'm\n"
-                f"№ {oid}\n"
-                "⏳ Kutilmoqda",
+            n = int(data.split(":", 1)[1])
+            if n not in [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]:
+                raise ValueError("Stars package")
+            amount = n * STAR_PRICE
+            oid = create_order(uid, f"{n} Stars", amount)
+            await safe_edit(
+                q.message,
+                "🌟 BUYURTMA YARATILDI\n\n"
+                f"🌟 {n} Stars\n"
+                f"💳 {money(amount)} so'm\n"
+                f"📦 № {oid}\n"
+                "⏳ Holat: Kutilmoqda",
                 InlineKeyboardMarkup([
                     [InlineKeyboardButton("📦 Buyurtmam", callback_data="orders")],
-                    [InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")],
+                    [InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")],
                 ]),
             )
 
         elif data.startswith("prem:"):
-            index = int(data.split(":", 1)[1])
-            if index < 0 or index >= len(PREMIUM):
+            idx = int(data.split(":", 1)[1])
+            if not 0 <= idx < len(PREMIUM):
                 raise ValueError("Premium index")
-            name, amount = PREMIUM[index]
-            oid = order(user.id, f"Premium {name}", amount)
-            await replace_message(
-                query.message,
-                "💎 PREMIUM BUYURTMA\n\n"
-                f"Muddat: {name}\n"
-                f"Narx: {money(amount)} so'm\n"
-                f"№ {oid}\n"
-                "⏳ Kutilmoqda",
+            name, amount = PREMIUM[idx]
+            oid = create_order(uid, f"Premium {name}", amount)
+            await safe_edit(
+                q.message,
+                "💎 BUYURTMA YARATILDI\n\n"
+                f"💎 Premium: {name}\n"
+                f"💳 {money(amount)} so'm\n"
+                f"📦 № {oid}\n"
+                "⏳ Holat: Kutilmoqda",
                 InlineKeyboardMarkup([
                     [InlineKeyboardButton("📦 Buyurtmam", callback_data="orders")],
-                    [InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")],
+                    [InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")],
                 ]),
             )
 
         elif data.startswith("top:"):
             amount = int(data.split(":", 1)[1])
             if amount not in TOPUPS:
-                raise ValueError("Topup amount")
-            oid = order(user.id, "Hisob to'ldirish", amount)
-            await replace_message(
-                query.message,
-                "➕ HISOB TO'LDIRISH\n\n"
+                raise ValueError("Topup")
+            oid = create_order(uid, "Hisob to'ldirish", amount)
+            await safe_edit(
+                q.message,
+                "💳 TO'LOV SO'ROVI\n\n"
                 f"Summa: {money(amount)} so'm\n"
-                f"№ {oid}\n"
-                "⏳ Kutilmoqda",
+                f"📦 № {oid}\n"
+                "⏳ Holat: Kutilmoqda",
                 InlineKeyboardMarkup([
                     [InlineKeyboardButton("📦 Buyurtmam", callback_data="orders")],
-                    [InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")],
+                    [InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")],
                 ]),
             )
 
         elif data.startswith("gift:"):
             gift_id = data.split(":", 1)[1]
             result = await context.bot.get_available_gifts()
-            gift = next(
-                (g for g in result.gifts if str(g.id) == gift_id),
-                None,
-            )
+            gift = next((g for g in result.gifts if str(g.id) == gift_id), None)
             if gift is None:
-                raise ValueError("Gift topilmadi")
+                raise ValueError("Gift not found")
 
             amount = gift.star_count * STAR_PRICE
-            oid = order(
-                user.id,
+            oid = create_order(
+                uid,
                 f"Telegram Gift ({gift.star_count} Stars)",
                 amount,
             )
 
-            # Haqiqiy gift sticker/rasmi.
+            # Haqiqiy Telegram gift rasmi/stickeri.
             try:
-                await query.message.reply_sticker(gift.sticker.file_id)
+                await q.message.reply_sticker(gift.sticker.file_id)
             except Exception as e:
-                print("GIFT STICKER ERROR:", repr(e))
+                print("GIFT IMAGE ERROR:", repr(e))
 
-            await query.message.reply_text(
-                "🎁 TANLANGAN SOVG'A\n\n"
-                f"⭐ Qiymati: {gift.star_count} Stars\n"
+            await q.message.reply_text(
+                "🎁 SOVG'A TANLANDI\n\n"
+                f"🌟 Qiymati: {gift.star_count} Stars\n"
                 f"💳 Narxi: {money(amount)} so'm\n"
-                f"📦 Buyurtma: №{oid}\n"
+                f"📦 № {oid}\n"
                 "⏳ Holat: Kutilmoqda",
                 reply_markup=InlineKeyboardMarkup([
                     [
-                        InlineKeyboardButton("🎁 Yana sovg'a", callback_data="gifts"),
+                        InlineKeyboardButton("🎁 Boshqa sovg'a", callback_data="gifts"),
                         InlineKeyboardButton("📦 Buyurtmam", callback_data="orders"),
                     ],
-                    [InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")],
+                    [InlineKeyboardButton("⌂ Bosh sahifa", callback_data="home")],
                 ]),
             )
 
     except Exception as e:
         print("CALLBACK ERROR:", repr(e))
         try:
-            await query.message.reply_text(
-                "⚠️ Xatolik yuz berdi. Qaytadan urinib ko'ring.",
-                reply_markup=back_keyboard(),
+            await q.message.reply_text(
+                "⚠️ Bo'limni ochishda xatolik yuz berdi.",
+                reply_markup=back(uid),
             )
         except Exception:
             pass
@@ -538,10 +545,10 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(callback))
 
-    print("STARGIFT SHOP FINAL BOT RUNNING")
+    print("STARGIFT MODERN BOT RUNNING")
     app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
     main()
-    
+            
