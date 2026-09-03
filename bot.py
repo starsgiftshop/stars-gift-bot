@@ -110,10 +110,12 @@ def get_orders(user_id):
 
 # =========================
 # NARX
+# 100 ⭐ = 19 500 SO'M
+# 1 ⭐ = 195 SO'M
 # =========================
 
 def stars_price(stars):
-    return stars * 95
+    return stars * 195
 
 
 # =========================
@@ -201,14 +203,15 @@ async def show_stars(query):
     await query.edit_message_text(
         "⭐ <b>Stars olish</b>\n\n"
         "Kerakli miqdorni tanlang 👇\n\n"
-        "💵 1 ⭐ = 95 so‘m",
+        "💵 1 ⭐ = 195 so‘m\n"
+        "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
 
 # =========================
-# CUSTOM STARS
+# BOSHQA MIQDOR
 # =========================
 
 async def custom_stars(query, context):
@@ -219,7 +222,8 @@ async def custom_stars(query, context):
         "✏️ <b>Boshqa miqdor</b>\n\n"
         "Nechta Stars kerakligini yozing.\n\n"
         "🔹 Minimum: <b>10 Stars</b>\n"
-        "🔹 1 ⭐ = <b>95 so‘m</b>\n\n"
+        "🔹 1 ⭐ = <b>195 so‘m</b>\n"
+        "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>\n\n"
         "Masalan: <code>350</code>",
         parse_mode="HTML",
         reply_markup=back_button("stars"),
@@ -272,8 +276,7 @@ async def custom_stars_message(update, context):
         f"⭐ Miqdor: <b>{amount} Stars</b>\n"
         f"💰 Narx: <b>{price:,} so‘m</b>\n\n"
         "📊 Holat: <b>Kutilmoqda</b>\n"
-        "⏱️ Bajarilish vaqti:\n"
-        "<b>To‘lov tasdiqlangach avtomatik</b>",
+        "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([
             [
@@ -342,7 +345,8 @@ async def show_gifts(query, context):
 
         await query.edit_message_text(
             "🎁 <b>Giftlar</b>\n\n"
-            "Kerakli Giftni tanlang 👇",
+            "Kerakli Giftni tanlang 👇\n\n"
+            "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
@@ -398,9 +402,9 @@ async def gift_preview(query, context, gift_id):
             f"{emoji} <b>Gift</b>\n\n"
             f"⭐ Gift qiymati: <b>{stars} Stars</b>\n"
             f"💰 Sotuv narxi: <b>{price:,} so‘m</b>\n\n"
-            "⏱️ <b>Bajarilish vaqti</b>\n"
-            "To‘lov tasdiqlangach avtomatik.\n\n"
-            "📦 Buyurtma holati:\n"
+            "⏱️ Bajarilish vaqti:\n"
+            "<b>O‘rtacha 30 soniya</b>\n\n"
+            "📊 Buyurtma holati:\n"
             "<b>Kutilmoqda</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
@@ -436,8 +440,7 @@ async def gift_preview(query, context, gift_id):
 
 async def show_orders(query):
 
-    user_id = query.from_user.id
-    orders = get_orders(user_id)
+    orders = get_orders(query.from_user.id)
 
     if not orders:
 
@@ -461,7 +464,8 @@ async def show_orders(query):
             f"⭐ {quantity}\n"
             f"💰 {price:,} so‘m\n"
             f"📊 {status}\n"
-            f"⏱️ {created}\n"
+            f"⏱️ Bajarilish: <b>o‘rtacha 30 soniya</b>\n"
+            f"🕐 {created}\n"
             "────────────\n"
         )
 
@@ -524,8 +528,7 @@ async def button(update: Update, context):
             f"⭐ Miqdor: <b>{amount} Stars</b>\n"
             f"💰 Narx: <b>{price:,} so‘m</b>\n\n"
             "📊 Holat: <b>Kutilmoqda</b>\n"
-            "⏱️ Bajarilish vaqti:\n"
-            "<b>To‘lov tasdiqlangach avtomatik</b>",
+            "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
                 [
@@ -546,7 +549,7 @@ async def button(update: Update, context):
     elif data.startswith("pay:"):
 
         await query.answer(
-            "💳 Click to‘lovi keyingi bosqichda ulanadi.",
+            "💳 To‘lov tizimi keyingi bosqichda ulanadi.",
             show_alert=True,
         )
 
@@ -562,7 +565,7 @@ async def button(update: Update, context):
     elif data.startswith("buygift:"):
 
         await query.answer(
-            "💳 Click to‘lovi keyingi bosqichda ulanadi.",
+            "💳 To‘lov tizimi keyingi bosqichda ulanadi.",
             show_alert=True,
         )
 
@@ -575,8 +578,7 @@ async def button(update: Update, context):
         await query.edit_message_text(
             "💎 <b>Premium olish</b>\n\n"
             "Premium paketlari tez orada ulanadi.\n\n"
-            "⏱️ Bajarilish vaqti:\n"
-            "<b>To‘lov tasdiqlangach avtomatik</b>",
+            "⏱️ Bajarilish vaqti: <b>o‘rtacha 30 soniya</b>",
             parse_mode="HTML",
             reply_markup=back_button(),
         )
@@ -609,8 +611,7 @@ async def button(update: Update, context):
 
         await query.edit_message_text(
             "🔵 <b>Yordam</b>\n\n"
-            "Muammo bo‘lsa administrator bilan bog‘laning.\n\n"
-            "📋 Buyurtma ID orqali buyurtmani aniqlash mumkin.",
+            "Muammo bo‘lsa administrator bilan bog‘laning.",
             parse_mode="HTML",
             reply_markup=back_button(),
         )
