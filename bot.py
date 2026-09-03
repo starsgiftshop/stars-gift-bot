@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import uuid
 from datetime import datetime
 
@@ -13,22 +14,110 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("BOT_TOKEN")
+DB = "shop.db"
+
+STARS_PACKAGES = [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]
 
 
 # =========================
-# STARS NARXI
-# 1 STAR = 95 SO'M
+# DATABASE
+# =========================
+
+def db():
+    return sqlite3.connect(DB)
+
+
+def init_db():
+    con = db()
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT,
+            balance INTEGER DEFAULT 0
+        )
+    """)
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER,
+            product TEXT,
+            quantity INTEGER,
+            price INTEGER,
+            status TEXT,
+            created TEXT
+        )
+    """)
+
+    con.commit()
+    con.close()
+
+
+def save_user(user_id, name):
+    con = db()
+
+    con.execute("""
+        INSERT INTO users(user_id, name)
+        VALUES(?, ?)
+        ON CONFLICT(user_id)
+        DO UPDATE SET name=excluded.name
+    """, (user_id, name))
+
+    con.commit()
+    con.close()
+
+
+def create_order(user_id, product, quantity, price):
+    order_id = "SGS-" + uuid.uuid4().hex[:8].upper()
+
+    con = db()
+
+    con.execute("""
+        INSERT INTO orders
+        (id, user_id, product, quantity, price, status, created)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        order_id,
+        user_id,
+        product,
+        quantity,
+        price,
+        "Kutilmoqda",
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+    ))
+
+    con.commit()
+    con.close()
+
+    return order_id
+
+
+def get_orders(user_id):
+    con = db()
+
+    rows = con.execute("""
+        SELECT id, product, quantity, price, status, created
+        FROM orders
+        WHERE user_id=?
+        ORDER BY rowid DESC
+        LIMIT 20
+    """, (user_id,)).fetchall()
+
+    con.close()
+    return rows
+
+
+# =========================
+# NARX
 # =========================
 
 def stars_price(stars):
     return stars * 95
 
 
-STARS_PACKAGES = [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]
-
-
 # =========================
-# ASOSIY MENYU
+# MENYU
 # =========================
 
 def menu():
@@ -43,13 +132,27 @@ def menu():
     ])
 
 
+def back_button(callback="back"):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("◀️ Orqaga", callback_data=callback)]
+    ])
+
+
 # =========================
 # START
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     if not update.message:
         return
+
+    user = update.effective_user
+
+    save_user(
+        user.id,
+        user.first_name or ""
+    )
 
     context.user_data["waiting_stars"] = False
 
@@ -66,11 +169,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # STARS
 # =========================
 
-async def show_stars(query, context):
+async def show_stars(query):
 
     buttons = []
 
     for stars in STARS_PACKAGES:
+
         price = stars_price(stars)
 
         buttons.append([
@@ -96,14 +200,15 @@ async def show_stars(query, context):
 
     await query.edit_message_text(
         "⭐ <b>Stars olish</b>\n\n"
-        "Kerakli Stars miqdorini tanlang 👇",
+        "Kerakli miqdorni tanlang 👇\n\n"
+        "💵 1 ⭐ = 95 so‘m",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
 
 # =========================
-# BOSHQA MIQDOR
+# CUSTOM STARS
 # =========================
 
 async def custom_stars(query, context):
@@ -114,29 +219,22 @@ async def custom_stars(query, context):
         "✏️ <b>Boshqa miqdor</b>\n\n"
         "Nechta Stars kerakligini yozing.\n\n"
         "🔹 Minimum: <b>10 Stars</b>\n"
+        "🔹 1 ⭐ = <b>95 so‘m</b>\n\n"
         "Masalan: <code>350</code>",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "◀️ Orqaga",
-                    callback_data="stars",
-                )
-            ]
-        ]),
+        reply_markup=back_button("stars"),
     )
 
 
-async def custom_stars_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def custom_stars_message(update, context):
 
     if not context.user_data.get("waiting_stars"):
         return
 
-    text = update.message.text.strip()
-
     try:
-        amount = int(text)
+        amount = int(update.message.text.strip())
     except ValueError:
+
         await update.message.reply_text(
             "❌ Faqat raqam yozing.\n"
             "Masalan: 350"
@@ -144,12 +242,14 @@ async def custom_stars_message(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if amount < 10:
+
         await update.message.reply_text(
             "❌ Minimum 10 Stars."
         )
         return
 
     if amount > 100000:
+
         await update.message.reply_text(
             "❌ Maksimum 100 000 Stars."
         )
@@ -159,43 +259,21 @@ async def custom_stars_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     price = stars_price(amount)
 
-    await create_order_message(
-        update,
-        context,
+    order_id = create_order(
+        update.effective_user.id,
         "Stars",
         amount,
         price,
     )
 
-
-# =========================
-# BUYURTMA YARATISH
-# =========================
-
-async def create_order_message(update, context, product, quantity, price):
-
-    order_id = "SGS-" + uuid.uuid4().hex[:8].upper()
-
-    order = {
-        "id": order_id,
-        "product": product,
-        "quantity": quantity,
-        "price": price,
-        "status": "Kutilmoqda",
-        "created": datetime.now().strftime("%d.%m.%Y %H:%M"),
-    }
-
-    orders = context.user_data.setdefault("orders", [])
-    orders.append(order)
-
     await update.message.reply_text(
-        "📦 <b>Buyurtma</b>\n\n"
-        f"🆔 Buyurtma ID: <code>{order_id}</code>\n"
-        f"📦 Mahsulot: <b>{product}</b>\n"
-        f"⭐ Miqdor: <b>{quantity}</b>\n"
+        "📦 <b>Buyurtma yaratildi</b>\n\n"
+        f"🆔 ID: <code>{order_id}</code>\n"
+        f"⭐ Miqdor: <b>{amount} Stars</b>\n"
         f"💰 Narx: <b>{price:,} so‘m</b>\n\n"
         "📊 Holat: <b>Kutilmoqda</b>\n"
-        "⏱️ Bajarilish vaqti: <b>To‘lov tasdiqlangach avtomatik</b>",
+        "⏱️ Bajarilish vaqti:\n"
+        "<b>To‘lov tasdiqlangach avtomatik</b>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([
             [
@@ -221,19 +299,14 @@ async def create_order_message(update, context, product, quantity, price):
 async def show_gifts(query, context):
 
     try:
+
         result = await context.bot.get_available_gifts()
 
         if not result or not result.gifts:
+
             await query.edit_message_text(
                 "🎁 Hozircha Gift mavjud emas.",
-                reply_markup=InlineKeyboardMarkup([
-                    [
-                        InlineKeyboardButton(
-                            "◀️ Orqaga",
-                            callback_data="back",
-                        )
-                    ]
-                ]),
+                reply_markup=back_button(),
             )
             return
 
@@ -254,7 +327,8 @@ async def show_gifts(query, context):
 
             buttons.append([
                 InlineKeyboardButton(
-                    f"{emoji} {stars}⭐ — {price:,} so‘m".replace(",", " "),
+                    f"{emoji} {stars}⭐ — "
+                    f"{price:,} so‘m".replace(",", " "),
                     callback_data=f"gift:{gift.id}",
                 )
             ])
@@ -274,18 +348,12 @@ async def show_gifts(query, context):
         )
 
     except Exception as e:
+
         print("GIFTS ERROR:", repr(e))
 
         await query.edit_message_text(
             "❌ Giftlarni yuklashda xatolik.",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "◀️ Orqaga",
-                        callback_data="back",
-                    )
-                ]
-            ]),
+            reply_markup=back_button(),
         )
 
 
@@ -296,16 +364,19 @@ async def show_gifts(query, context):
 async def gift_preview(query, context, gift_id):
 
     try:
+
         result = await context.bot.get_available_gifts()
 
         selected = None
 
         for gift in result.gifts:
+
             if str(gift.id) == str(gift_id):
                 selected = gift
                 break
 
         if selected is None:
+
             await query.answer(
                 "Gift topilmadi.",
                 show_alert=True,
@@ -327,13 +398,16 @@ async def gift_preview(query, context, gift_id):
             f"{emoji} <b>Gift</b>\n\n"
             f"⭐ Gift qiymati: <b>{stars} Stars</b>\n"
             f"💰 Sotuv narxi: <b>{price:,} so‘m</b>\n\n"
-            "📦 Bajarilish vaqti:\n"
-            "<b>To‘lov tasdiqlangach avtomatik</b>",
+            "⏱️ <b>Bajarilish vaqti</b>\n"
+            "To‘lov tasdiqlangach avtomatik.\n\n"
+            "📦 Buyurtma holati:\n"
+            "<b>Kutilmoqda</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton(
-                        f"💳 Sotib olish — {price:,} so‘m".replace(",", " "),
+                        f"💳 Sotib olish — "
+                        f"{price:,} so‘m".replace(",", " "),
                         callback_data=f"buygift:{selected.id}",
                     )
                 ],
@@ -347,6 +421,7 @@ async def gift_preview(query, context, gift_id):
         )
 
     except Exception as e:
+
         print("GIFT PREVIEW ERROR:", repr(e))
 
         await query.answer(
@@ -359,50 +434,41 @@ async def gift_preview(query, context, gift_id):
 # BUYURTMALAR
 # =========================
 
-async def show_orders(query, context):
+async def show_orders(query):
 
-    orders = context.user_data.get("orders", [])
+    user_id = query.from_user.id
+    orders = get_orders(user_id)
 
     if not orders:
+
         await query.edit_message_text(
             "📋 <b>Buyurtmalarim</b>\n\n"
             "Hozircha buyurtmalar yo‘q.",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "◀️ Orqaga",
-                        callback_data="back",
-                    )
-                ]
-            ]),
+            reply_markup=back_button(),
         )
         return
 
     text = "📋 <b>Buyurtmalarim</b>\n\n"
 
-    for order in orders[-10:][::-1]:
+    for order in orders:
+
+        order_id, product, quantity, price, status, created = order
 
         text += (
-            f"🆔 <code>{order['id']}</code>\n"
-            f"📦 {order['product']}\n"
-            f"⭐ {order['quantity']}\n"
-            f"💰 {order['price']:,} so‘m\n"
-            f"📊 {order['status']}\n"
-            f"⏱️ {order['created']}\n\n"
+            f"🆔 <code>{order_id}</code>\n"
+            f"📦 {product}\n"
+            f"⭐ {quantity}\n"
+            f"💰 {price:,} so‘m\n"
+            f"📊 {status}\n"
+            f"⏱️ {created}\n"
+            "────────────\n"
         )
 
     await query.edit_message_text(
         text.replace(",", " "),
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "◀️ Orqaga",
-                    callback_data="back",
-                )
-            ]
-        ]),
+        reply_markup=back_button(),
     )
 
 
@@ -410,7 +476,7 @@ async def show_orders(query, context):
 # BUTTONLAR
 # =========================
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button(update: Update, context):
 
     query = update.callback_query
     data = query.data or ""
@@ -434,7 +500,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "stars":
 
         context.user_data["waiting_stars"] = False
-        await show_stars(query, context)
+        await show_stars(query)
 
     elif data == "custom_stars":
 
@@ -445,19 +511,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = int(data.split(":", 1)[1])
         price = stars_price(amount)
 
-        order_id = "SGS-" + uuid.uuid4().hex[:8].upper()
-
-        order = {
-            "id": order_id,
-            "product": "Stars",
-            "quantity": amount,
-            "price": price,
-            "status": "Kutilmoqda",
-            "created": datetime.now().strftime("%d.%m.%Y %H:%M"),
-        }
-
-        orders = context.user_data.setdefault("orders", [])
-        orders.append(order)
+        order_id = create_order(
+            query.from_user.id,
+            "Stars",
+            amount,
+            price,
+        )
 
         await query.edit_message_text(
             "📦 <b>Stars buyurtmasi</b>\n\n"
@@ -465,7 +524,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⭐ Miqdor: <b>{amount} Stars</b>\n"
             f"💰 Narx: <b>{price:,} so‘m</b>\n\n"
             "📊 Holat: <b>Kutilmoqda</b>\n"
-            "⏱️ Bajarilish vaqti: "
+            "⏱️ Bajarilish vaqti:\n"
             "<b>To‘lov tasdiqlangach avtomatik</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
@@ -487,7 +546,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("pay:"):
 
         await query.answer(
-            "💳 To‘lov tizimi keyingi bosqichda ulanadi.",
+            "💳 Click to‘lovi keyingi bosqichda ulanadi.",
             show_alert=True,
         )
 
@@ -503,28 +562,23 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("buygift:"):
 
         await query.answer(
-            "💳 To‘lov tizimi keyingi bosqichda ulanadi.",
+            "💳 Click to‘lovi keyingi bosqichda ulanadi.",
             show_alert=True,
         )
 
     elif data == "orders":
 
-        await show_orders(query, context)
+        await show_orders(query)
 
     elif data == "premium":
 
         await query.edit_message_text(
-            "💎 <b>Premium</b>\n\n"
-            "Premium paketlari tez orada ulanadi.",
+            "💎 <b>Premium olish</b>\n\n"
+            "Premium paketlari tez orada ulanadi.\n\n"
+            "⏱️ Bajarilish vaqti:\n"
+            "<b>To‘lov tasdiqlangach avtomatik</b>",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "◀️ Orqaga",
-                        callback_data="back",
-                    )
-                ]
-            ]),
+            reply_markup=back_button(),
         )
 
     elif data == "balance":
@@ -533,53 +587,32 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "💰 <b>Balansni to‘ldirish</b>\n\n"
             "Click to‘lovi keyingi bosqichda ulanadi.",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "◀️ Orqaga",
-                        callback_data="back",
-                    )
-                ]
-            ]),
+            reply_markup=back_button(),
         )
 
     elif data == "profile":
 
         user = query.from_user
-
-        orders = context.user_data.get("orders", [])
+        orders = get_orders(user.id)
 
         await query.edit_message_text(
             "👤 <b>Profil</b>\n\n"
             f"👤 Ism: {user.first_name}\n"
             f"🆔 ID: <code>{user.id}</code>\n"
-            f"📋 Buyurtmalar: <b>{len(orders)}</b>\n\n"
+            f"📋 Buyurtmalar: <b>{len(orders)}</b>\n"
             "💰 Balans: <b>0 so‘m</b>",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "◀️ Orqaga",
-                        callback_data="back",
-                    )
-                ]
-            ]),
+            reply_markup=back_button(),
         )
 
     elif data == "help":
 
         await query.edit_message_text(
             "🔵 <b>Yordam</b>\n\n"
-            "Muammo bo‘lsa administrator bilan bog‘laning.",
+            "Muammo bo‘lsa administrator bilan bog‘laning.\n\n"
+            "📋 Buyurtma ID orqali buyurtmani aniqlash mumkin.",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "◀️ Orqaga",
-                        callback_data="back",
-                    )
-                ]
-            ]),
+            reply_markup=back_button(),
         )
 
 
@@ -589,6 +622,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN topilmadi!")
+
+init_db()
 
 application = Application.builder().token(TOKEN).build()
 
@@ -609,4 +644,4 @@ application.add_handler(
 
 application.run_polling(
     drop_pending_updates=True
-        )
+    )
