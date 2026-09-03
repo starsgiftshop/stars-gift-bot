@@ -1,4 +1,3 @@
-
 import os
 import sqlite3
 from telegram import (
@@ -7,12 +6,15 @@ from telegram import (
     InlineKeyboardMarkup,
     BotCommand,
     MenuButtonCommands,
+    ReplyKeyboardRemove,
 )
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -163,6 +165,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not update.message:
         return
+
+    # Old ReplyKeyboard (Yulduzlar/Balansim/Buyurtmalar...) ni majburan olib tashlaymiz.
+    # Endi faqat Telegramning yuqoridagi Menu belgisi ishlatiladi.
+    await update.message.reply_text(
+        "✦ Yangi menyu yoqildi ✦",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
     if os.path.isfile(START_IMAGE):
         with open(START_IMAGE, "rb") as photo:
@@ -540,30 +549,91 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
-def main():
-    if not TOKEN:
-        raise RuntimeError(
-            "BOT_TOKEN topilmadi. Railway Variables ichiga BOT_TOKEN qo'ying."
-        )
 
-    app = (
-        Application.builder()
-        .token(TOKEN)
-        .post_init(setup_bot)
-        .build()
+async def legacy_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Eski ReplyKeyboard qolib ketgan bo'lsa, uning tugmalarini ham ishlatadi.
+    Birinchi ishlatishda eski klaviaturani olib tashlaydi."""
+    message = update.message
+    if not message:
+        return
+
+    await message.reply_text(
+        "✦ STARGIFT SHOP ✦\n\n"
+        "Eski menyu yangilandi. Endi menyu yuqoridagi ⠿ belgisi orqali ochiladi.",
+        reply_markup=ReplyKeyboardRemove(),
     )
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("services", services))
-    app.add_handler(CommandHandler("balance", balance_command))
-    app.add_handler(CommandHandler("orders", orders_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CallbackQueryHandler(callback))
+    text = (message.text or "").strip().lower()
 
-    print("STARGIFT SHOP BOT IS RUNNING")
-    app.run_polling(drop_pending_updates=True)
+    # Eski tugmalarni yangi sahifalarga yo'naltiramiz.
+    if text in {"⭐ yulduzlar", "yulduzlar", "⭐ stars", "stars"}:
+        await message.reply_text(
+            "⭐ YULDUZLAR\n\nKerakli Stars paketini tanlang.\n1 ⭐ = 195 so'm",
+            reply_markup=stars_keyboard(),
+        )
+    elif text in {"🎁 sovg'alar", "sovg'alar", "🎁 gifts", "gifts"}:
+        await message.reply_text(
+            "🎁 SOVG'ALAR\n\nSovg'alar ro'yxatini ochish uchun bosing:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎁 Sovg'alarni ochish", callback_data="gifts")],
+                [InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")],
+            ]),
+        )
+    elif text in {"💎 premium", "premium"}:
+        await message.reply_text(
+            "💎 PREMIUM\n\nPremium muddatini tanlang:",
+            reply_markup=premium_keyboard(),
+        )
+    elif text in {"💰 balansim", "balansim", "💰 balans", "balans"}:
+        await message.reply_text(
+            f"💰 BALANSIM\n\nJoriy balans: {money(get_balance(update.effective_user.id))} so'm",
+            reply_markup=back_keyboard(),
+        )
+    elif text in {"➕ hisob to'ldirish", "hisob to'ldirish", "hisob", "➕ hisob"}:
+        await message.reply_text(
+            "➕ HISOB TO'LDIRISH\n\nKerakli summani tanlang:",
+            reply_markup=topup_keyboard(),
+        )
+    elif text in {"📦 buyurtmalar", "buyurtmalar", "📦 buyurtmalarim", "buyurtmalarim"}:
+        await show_orders(message, update.effective_user.id, edit=False)
+    elif text in {"👤 profilim", "profilim", "profil"}:
+        user = update.effective_user
+        username = f"@{user.username}" if user.username else "username yo'q"
+        await message.reply_text(
+            "👤 PROFILIM\n\n"
+            f"Username: {username}\n"
+            f"ID: {user.id}\n"
+            f"💰 Balans: {money(get_balance(user.id))} so'm",
+            reply_markup=back_keyboard(),
+        )
+    elif text in {"🔵 yordam", "yordam"}:
+        await message.reply_text(
+            f"🔵 YORDAM\n\nAdministrator: {ADMIN}\n\nSavol yoki muammo bo'lsa yozing.",
+            reply_markup=back_keyboard(),
+        )
+    elif text in {"ℹ️ ma'lumot", "ma'lumot", "ma'lumot"}:
+        await message.reply_text(
+            "ℹ️ MA'LUMOT\n\n"
+            "✦ STARGIFT SHOP\n"
+            "⭐ Yulduzlar\n🎁 Telegram sovg'alari\n💎 Premium\n\n"
+            "💳 Narxlar so'mda.\n⏱ O'rtacha bajarilish: 30 soniya.",
+            reply_markup=back_keyboard(),
+        )
 
 
-if __name__ == "__main__":
-    main()
-            
+def stars_keyboard():
+    packages = [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]
+    rows = []
+    for i in range(0, len(packages), 2):
+        rows.append([
+            InlineKeyboardButton(
+                f"⭐ {count} • {money(count * STAR_PRICE)} so'm",
+                callback_data=f"star:{count}",
+            )
+            for count in packages[i:i+2]
+        ])
+    rows.append([InlineKeyboardButton("‹ Bosh sahifa", callback_data="home")])
+    return InlineKeyboardMarkup(rows)
+
+
+def pre
