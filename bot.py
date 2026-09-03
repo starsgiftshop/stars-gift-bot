@@ -1,4 +1,5 @@
 import os
+
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -17,42 +18,52 @@ TOKEN = os.getenv("BOT_TOKEN")
 PRICE_PER_STAR = 95
 
 
-def gift_price(stars):
+# =========================
+# NARXLAR
+# =========================
+
+def gift_price(stars: int) -> int:
     prices = {
         15: 3000,
         25: 5000,
         50: 14000,
         100: 27000,
     }
-    return prices.get(stars, stars * PRICE_PER_STAR)
+
+    if stars in prices:
+        return prices[stars]
+
+    return stars * PRICE_PER_STAR
 
 
 # =========================
-# START
+# ASOSIY MENU
 # =========================
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
+def main_keyboard():
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("⭐ Stars olish", callback_data="stars")],
         [InlineKeyboardButton("🎁 Gift olish", callback_data="gift")],
         [InlineKeyboardButton("💎 Premium olish", callback_data="premium")],
         [InlineKeyboardButton("💰 Balansni to‘ldirish", callback_data="balance")],
         [InlineKeyboardButton("👤 Profil", callback_data="profile")],
         [InlineKeyboardButton("🔵 Yordam", callback_data="help")],
-    ]
+    ])
 
-    text = (
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["waiting_stars"] = False
+
+    if not update.message:
+        return
+
+    await update.message.reply_text(
         "🎁 <b>Stars Gift Shop</b>\n\n"
         "Assalomu alaykum! 👋\n"
-        "Kerakli bo‘limni tanlang 👇"
+        "Kerakli bo‘limni tanlang 👇",
+        parse_mode="HTML",
+        reply_markup=main_keyboard(),
     )
-
-    if update.message:
-        await update.message.reply_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
 
 
 # =========================
@@ -60,43 +71,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 
 async def show_stars(query, context):
+    context.user_data["waiting_stars"] = False
+
     keyboard = [
-        [InlineKeyboardButton("⭐ 100 Stars — 9 500 so‘m", callback_data="buy_100")],
-        [InlineKeyboardButton("⭐ 250 Stars — 23 750 so‘m", callback_data="buy_250")],
-        [InlineKeyboardButton("⭐ 500 Stars — 47 500 so‘m", callback_data="buy_500")],
-        [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="custom_stars")],
-        [InlineKeyboardButton("◀️ Orqaga", callback_data="back")],
+        [InlineKeyboardButton("⭐ 100 Stars — 9 500 so‘m",
+                              callback_data="buy_100")],
+        [InlineKeyboardButton("⭐ 250 Stars — 23 750 so‘m",
+                              callback_data="buy_250")],
+        [InlineKeyboardButton("⭐ 500 Stars — 47 500 so‘m",
+                              callback_data="buy_500")],
+        [InlineKeyboardButton("✏️ Boshqa miqdor",
+                              callback_data="custom_stars")],
+        [InlineKeyboardButton("◀️ Orqaga",
+                              callback_data="back")],
     ]
 
     await query.edit_message_text(
-        "⭐ <b>Stars olish</b>\n\nPaketni tanlang:",
+        "⭐ <b>Stars olish</b>\n\n"
+        "Kerakli miqdorni tanlang 👇",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
-
-# =========================
-# CUSTOM STARS
-# =========================
 
 async def ask_custom_stars(query, context):
     context.user_data["waiting_stars"] = True
 
-    keyboard = [
-        [InlineKeyboardButton("◀️ Orqaga", callback_data="stars")]
-    ]
-
     await query.edit_message_text(
         "✏️ <b>Stars miqdorini yozing</b>\n\n"
-        "Minimal miqdor: <b>10 Stars</b>\n\n"
-        "Masalan: <code>30</code>",
+        "Masalan: <b>30</b>\n\n"
+        "⚠️ Minimal miqdor: <b>10 Stars</b>",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("◀️ Orqaga", callback_data="stars")]
+        ]),
     )
 
 
 async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.user_data.get("waiting_stars"):
+    if not update.message:
+        return
+
+    if not context.user_data.get("waiting_stars", False):
         return
 
     text = update.message.text.strip()
@@ -105,7 +121,9 @@ async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = int(text)
     except ValueError:
         await update.message.reply_text(
-            "❌ Faqat raqam yozing.\nMasalan: 30"
+            "❌ Faqat raqam yozing.\n\n"
+            "Masalan: <b>30</b>",
+            parse_mode="HTML",
         )
         return
 
@@ -113,6 +131,13 @@ async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Minimal miqdor <b>10 Stars</b>.",
             parse_mode="HTML",
+        )
+        return
+
+    if amount > 100000:
+        await update.message.reply_text(
+            "❌ Juda katta miqdor.\n"
+            "100 000 Stars gacha kiriting.",
         )
         return
 
@@ -138,7 +163,7 @@ async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# GIFTS
+# GIFTLAR
 # =========================
 
 async def show_gifts(query, context):
@@ -161,14 +186,15 @@ async def show_gifts(query, context):
             stars = gift.star_count
             price = gift_price(stars)
 
-            button_text = (
-                f"🎁 Gift {index} — {stars}⭐ | "
+            text = (
+                f"🎁 Gift {index} — "
+                f"{stars}⭐ | "
                 f"{price:,} so‘m"
             ).replace(",", " ")
 
             buttons.append([
                 InlineKeyboardButton(
-                    button_text,
+                    text,
                     callback_data=f"giftpick:{gift.id}"
                 )
             ])
@@ -184,7 +210,9 @@ async def show_gifts(query, context):
             reply_markup=InlineKeyboardMarkup(buttons),
         )
 
-    except Exception:
+    except Exception as e:
+        print("GIFTS ERROR:", repr(e))
+
         await query.edit_message_text(
             "❌ Giftlarni yuklashda xatolik yuz berdi.\n\n"
             "Keyinroq qayta urinib ko‘ring.",
@@ -210,13 +238,16 @@ async def show_gift_preview(query, context, gift_id):
                 break
 
         if selected is None:
-            await query.answer("Gift topilmadi.", show_alert=True)
+            await query.answer(
+                "❌ Gift topilmadi.",
+                show_alert=True
+            )
             return
 
         stars = selected.star_count
         price = gift_price(stars)
 
-        keyboard = [
+        keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
                     f"💳 Sotib olish — {price:,} so‘m".replace(",", " "),
@@ -228,70 +259,83 @@ async def show_gift_preview(query, context, gift_id):
                     "◀️ Giftlar",
                     callback_data="gift"
                 )
-            ],
-        ]
+            ]
+        ])
 
-        # Haqiqiy Gift rasmi/stickeri
+        # Haqiqiy Telegram Gift rasmi/stickeri
         await context.bot.send_sticker(
             chat_id=query.message.chat_id,
             sticker=selected.sticker.file_id,
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=keyboard,
         )
 
         await query.answer()
 
-    except Exception:
+    except Exception as e:
+        print("GIFT PREVIEW ERROR:", repr(e))
+
         await query.answer(
-            "❌ Gift rasmini yuklashda xatolik.",
+            f"❌ Xato: {str(e)[:180]}",
             show_alert=True
         )
 
 
 # =========================
-# BUTTON HANDLER
+# CALLBACK BUTTONLAR
 # =========================
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
 
-    data = query.data
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
+    data = query.data or ""
+
+    # Orqaga
     if data == "back":
         await start_from_button(query, context)
+        return
 
-    elif data == "stars":
+    # Stars
+    if data == "stars":
         await show_stars(query, context)
+        return
 
-    elif data == "custom_stars":
+    if data == "custom_stars":
         await ask_custom_stars(query, context)
+        return
 
-    elif data == "gift":
+    # Gift
+    if data == "gift":
         await show_gifts(query, context)
+        return
 
-    elif data.startswith("giftpick:"):
+    if data.startswith("giftpick:"):
         gift_id = data.split(":", 1)[1]
         await show_gift_preview(query, context, gift_id)
+        return
 
-    elif data.startswith("buygift:"):
+    # Gift sotib olish
+    if data.startswith("buygift:"):
         await query.answer(
-            "💳 To‘lov tizimi hali ulanmagan.",
+            "💳 To‘lov tizimi ulanmoqda.",
             show_alert=True
         )
+        return
 
-    elif data.startswith("buy_"):
+    # Stars sotib olish
+    if data.startswith("buy_"):
         await query.answer(
-            "💳 To‘lov tizimi hali ulanmagan.",
+            "💳 To‘lov tizimi ulanmoqda.",
             show_alert=True
         )
+        return
 
-    elif data.startswith("buy_custom_"):
-        await query.answer(
-            "💳 To‘lov tizimi hali ulanmagan.",
-            show_alert=True
-        )
-
-    elif data == "premium":
+    # Premium
+    if data == "premium":
         await query.edit_message_text(
             "💎 <b>Premium olish</b>\n\n"
             "Premium bo‘limi tez orada ishga tushadi.",
@@ -300,8 +344,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
             ]),
         )
+        return
 
-    elif data == "balance":
+    # Balans
+    if data == "balance":
         await query.edit_message_text(
             "💰 <b>Balansni to‘ldirish</b>\n\n"
             "To‘lov tizimi ulanmoqda.",
@@ -310,55 +356,54 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
             ]),
         )
+        return
 
-    elif data == "profile":
+    # Profil
+    if data == "profile":
         user = query.from_user
 
         await query.edit_message_text(
             f"👤 <b>Profil</b>\n\n"
             f"Ism: {user.first_name}\n"
-            f"ID: <code>{user.id}</code>",
+            f"ID: <code>{user.id}</code>\n\n"
+            "💰 Balans: 0 so‘m",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
             ]),
         )
+        return
 
-    elif data == "help":
+    # Yordam
+    if data == "help":
         await query.edit_message_text(
             "🔵 <b>Yordam</b>\n\n"
-            "Savollar bo‘lsa, administrator bilan bog‘laning.",
+            "Savollar bo‘lsa administrator bilan bog‘laning.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("◀️ Orqaga", callback_data="back")]
             ]),
         )
+        return
 
 
 # =========================
-# BACK TO MENU
+# MENU ORQAGA
 # =========================
 
 async def start_from_button(query, context):
-    keyboard = [
-        [InlineKeyboardButton("⭐ Stars olish", callback_data="stars")],
-        [InlineKeyboardButton("🎁 Gift olish", callback_data="gift")],
-        [InlineKeyboardButton("💎 Premium olish", callback_data="premium")],
-        [InlineKeyboardButton("💰 Balansni to‘ldirish", callback_data="balance")],
-        [InlineKeyboardButton("👤 Profil", callback_data="profile")],
-        [InlineKeyboardButton("🔵 Yordam", callback_data="help")],
-    ]
+    context.user_data["waiting_stars"] = False
 
     await query.edit_message_text(
         "🎁 <b>Stars Gift Shop</b>\n\n"
         "Kerakli bo‘limni tanlang 👇",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=main_keyboard(),
     )
 
 
 # =========================
-# APPLICATION
+# ISHGA TUSHIRISH
 # =========================
 
 if not TOKEN:
@@ -366,10 +411,19 @@ if not TOKEN:
 
 application = Application.builder().token(TOKEN).build()
 
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CallbackQueryHandler(button))
 application.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_number)
+    CommandHandler("start", start)
+)
+
+application.add_handler(
+    CallbackQueryHandler(button)
+)
+
+application.add_handler(
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handle_number
+    )
 )
 
 application.run_polling(drop_pending_updates=True)
