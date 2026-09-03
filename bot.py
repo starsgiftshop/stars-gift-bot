@@ -4,7 +4,8 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    MenuButtonCommands,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
     BotCommand,
 )
 from telegram.ext import (
@@ -18,6 +19,8 @@ from telegram.ext import (
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN = "@Shamsbekman"
+
+# GitHub repo ichiga shu nomli start rasmini ham joylasangiz, /start da rasm chiqadi.
 START_IMAGE = "stargift_start.png"
 
 STAR_PRICE = 195
@@ -30,7 +33,7 @@ PREMIUM = [
 TOPUP = [10000, 20000, 50000, 100000, 200000, 500000]
 
 
-# ---------- DATABASE ----------
+# ================= DATABASE =================
 def db():
     con = sqlite3.connect("shop.db")
     con.execute("""
@@ -45,8 +48,7 @@ def db():
             user_id INTEGER NOT NULL,
             item TEXT NOT NULL,
             amount INTEGER NOT NULL,
-            status TEXT DEFAULT 'pending',
-            created_at INTEGER DEFAULT (strftime('%s','now'))
+            status TEXT DEFAULT 'pending'
         )
     """)
     con.commit()
@@ -57,7 +59,7 @@ def ensure_user(user_id):
     con = db()
     con.execute(
         "INSERT OR IGNORE INTO users(user_id,balance) VALUES(?,0)",
-        (user_id,),
+        (user_id,)
     )
     con.commit()
     con.close()
@@ -68,7 +70,7 @@ def get_balance(user_id):
     con = db()
     row = con.execute(
         "SELECT balance FROM users WHERE user_id=?",
-        (user_id,),
+        (user_id,)
     ).fetchone()
     con.close()
     return row[0] if row else 0
@@ -78,7 +80,7 @@ def create_order(user_id, item, amount):
     con = db()
     cur = con.execute(
         "INSERT INTO orders(user_id,item,amount,status) VALUES(?,?,?,'pending')",
-        (user_id, item, amount),
+        (user_id, item, amount)
     )
     con.commit()
     order_id = cur.lastrowid
@@ -86,264 +88,153 @@ def create_order(user_id, item, amount):
     return order_id
 
 
-# ---------- UNIQUE UI ----------
-def home_keyboard():
+# ================= PASTDA DOIMIY MENYU =================
+# Neo SMM matnlari ko'chirilmagan.
+# Joylashish esa Telegramning reply-keyboard ko'rinishida.
+def main_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [
+                KeyboardButton("⭐ Yulduzlar"),
+                KeyboardButton("🎁 Sovg'alar"),
+            ],
+            [
+                KeyboardButton("💎 Premium"),
+                KeyboardButton("💰 Mening balansim"),
+            ],
+            [
+                KeyboardButton("➕ Hisobimni to'ldirish"),
+                KeyboardButton("📦 Buyurtmalarim"),
+            ],
+            [
+                KeyboardButton("👤 Kabinetim"),
+                KeyboardButton("🔵 Ko'mak"),
+            ],
+            [
+                KeyboardButton("ℹ️ Biz haqimizda"),
+            ],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Bo'limni tanlang...",
+    )
+
+
+def home_inline():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("⭐ STARS", callback_data="stars"),
-            InlineKeyboardButton("🎁 GIFTS", callback_data="gift"),
+            InlineKeyboardButton("⭐ Yulduzlar", callback_data="stars"),
+            InlineKeyboardButton("🎁 Sovg'alar", callback_data="gift"),
         ],
         [
-            InlineKeyboardButton("💎 PREMIUM", callback_data="premium"),
-            InlineKeyboardButton("💰 BALANS", callback_data="balance"),
+            InlineKeyboardButton("💎 Premium", callback_data="premium"),
+            InlineKeyboardButton("💰 Balans", callback_data="balance"),
         ],
         [
-            InlineKeyboardButton("➕ HISOB", callback_data="topup"),
-            InlineKeyboardButton("📦 BUYURTMALAR", callback_data="orders"),
+            InlineKeyboardButton("➕ Hisob", callback_data="topup"),
+            InlineKeyboardButton("📦 Buyurtmalar", callback_data="orders"),
         ],
         [
-            InlineKeyboardButton("👤 PROFIL", callback_data="profile"),
-            InlineKeyboardButton("🔵 YORDAM", callback_data="help"),
+            InlineKeyboardButton("👤 Kabinet", callback_data="profile"),
+            InlineKeyboardButton("🔵 Ko'mak", callback_data="help"),
         ],
         [
-            InlineKeyboardButton("ℹ️ MA'LUMOT", callback_data="info"),
+            InlineKeyboardButton("ℹ️ Ma'lumot", callback_data="info"),
         ],
     ])
 
 
-def stars_keyboard():
-    packs = [25, 50, 100, 125, 150, 175, 200, 300, 400, 500]
-    rows, row = [], []
-    for n in packs:
-        row.append(
-            InlineKeyboardButton(
-                f"⭐ {n} | {n*STAR_PRICE:,}".replace(",", " "),
-                callback_data=f"star:{n}",
-            )
-        )
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([
-        InlineKeyboardButton("↩️ ORQAGA", callback_data="home")
-    ])
-    return InlineKeyboardMarkup(rows)
-
-
-def premium_keyboard():
+def back_inline():
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("💎 1 OY", callback_data="prem:0"),
-            InlineKeyboardButton("45 000 so'm", callback_data="prem:0"),
-        ],
-        [
-            InlineKeyboardButton("💎 3 OY", callback_data="prem:1"),
-            InlineKeyboardButton("164 000 so'm", callback_data="prem:1"),
-        ],
-        [
-            InlineKeyboardButton("💎 6 OY", callback_data="prem:2"),
-            InlineKeyboardButton("222 000 so'm", callback_data="prem:2"),
-        ],
-        [
-            InlineKeyboardButton("💎 12 OY", callback_data="prem:3"),
-            InlineKeyboardButton("377 000 so'm", callback_data="prem:3"),
-        ],
-        [
-            InlineKeyboardButton("↩️ ORQAGA", callback_data="home")
-        ],
+        [InlineKeyboardButton("↩️ Ortga", callback_data="home")]
     ])
 
 
-def topup_keyboard():
-    rows, row = [], []
-    for amount in TOPUP:
-        row.append(
-            InlineKeyboardButton(
-                f"💳 {amount:,} so'm".replace(",", " "),
-                callback_data=f"topup:{amount}",
-            )
-        )
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([
-        InlineKeyboardButton("↩️ ORQAGA", callback_data="home")
-    ])
-    return InlineKeyboardMarkup(rows)
-
-
-def back_keyboard(target="home"):
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("↩️ ORQAGA", callback_data=target)],
-        [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
-    ])
-
-
-# ---------- START ----------
+# ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     ensure_user(user.id)
 
     text = (
-        "✨ STARGIFT SHOP ✨\n\n"
-        "Siz uchun yaratilgan zamonaviy raqamli do'kon.\n\n"
-        "⭐ Stars   •   🎁 Gifts   •   💎 Premium\n"
-        "⚡ Tezkor xizmat   •   🔐 Ishonchli\n\n"
+        "🌌 STARGIFT SHOP\n\n"
+        "Raqamli sovg'alar va Premium xizmatlari uchun "
+        "zamonaviy do'kon.\n\n"
+        "⚡ Tezkor xizmat  •  🔐 Ishonchli  •  💳 So'mda\n\n"
         "━━━━━━━━━━━━━━━━━━\n"
-        "KERAKLI BO'LIMNI TANLANG\n"
-        "━━━━━━━━━━━━━━━━━━"
+        "Pastdagi menyudan kerakli bo'limni tanlang."
     )
 
-    if update.message:
-        if os.path.exists(START_IMAGE):
-            with open(START_IMAGE, "rb") as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=text,
-                    reply_markup=home_keyboard(),
-                )
-        else:
-            await update.message.reply_text(
-                text,
-                reply_markup=home_keyboard(),
+    if os.path.exists(START_IMAGE):
+        with open(START_IMAGE, "rb") as photo:
+            await update.message.reply_photo(
+                photo=photo,
+                caption=text,
+                reply_markup=main_keyboard(),
             )
-
-
-# ---------- PAGES ----------
-async def show_services(query):
-    await query.edit_message_text(
-        "🧩 XIZMATLAR\n\n"
-        "Bir bo'limni tanlang — hammasi shu oynada boshqariladi.",
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("⭐ STARS", callback_data="stars"),
-                InlineKeyboardButton("🎁 GIFTS", callback_data="gift"),
-            ],
-            [
-                InlineKeyboardButton("💎 PREMIUM", callback_data="premium"),
-            ],
-            [
-                InlineKeyboardButton("↩️ BOSH SAHIFA", callback_data="home")
-            ],
-        ]),
-    )
-
-
-async def show_orders(query):
-    user_id = query.from_user.id
-    con = db()
-    rows = con.execute(
-        "SELECT id,item,amount,status FROM orders "
-        "WHERE user_id=? ORDER BY id DESC LIMIT 20",
-        (user_id,),
-    ).fetchall()
-    con.close()
-
-    if not rows:
-        await query.edit_message_text(
-            "📦 BUYURTMALAR\n\n"
-            "Hozircha bu yer bo'sh. 😊\n\n"
-            "Birinchi buyurtmangiz shu yerda paydo bo'ladi.",
-            reply_markup=back_keyboard(),
-        )
-        return
-
-    lines = ["📦 BUYURTMALAR\n"]
-    for order_id, item, amount, status in rows:
-        lines.append(
-            f"▸ #{order_id}  {item}\n"
-            f"  💳 {amount:,} so'm   •   📌 {status}\n".replace(",", " ")
+    else:
+        await update.message.reply_text(
+            text,
+            reply_markup=main_keyboard(),
         )
 
-    await query.edit_message_text(
-        "\n".join(lines),
-        reply_markup=back_keyboard(),
-    )
 
-
-async def show_balance(query):
-    amount = get_balance(query.from_user.id)
-    await query.edit_message_text(
-        "💰 BALANS\n\n"
-        f"Joriy balans:  {amount:,} so'm\n\n".replace(",", " ")
-        + "Hisobingizni to'ldirish uchun pastdagi tugmani bosing.",
+# ================= PAGES =================
+async def show_stars(target):
+    await target.edit_message_text(
+        "⭐ YULDUZLAR\n\n"
+        "Kerakli paketni tanlang:",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ HISOBNI TO'LDIRISH", callback_data="topup")],
+            [
+                InlineKeyboardButton("⭐ 25", callback_data="star:25"),
+                InlineKeyboardButton("⭐ 50", callback_data="star:50"),
+            ],
+            [
+                InlineKeyboardButton("⭐ 100", callback_data="star:100"),
+                InlineKeyboardButton("⭐ 125", callback_data="star:125"),
+            ],
+            [
+                InlineKeyboardButton("⭐ 150", callback_data="star:150"),
+                InlineKeyboardButton("⭐ 175", callback_data="star:175"),
+            ],
+            [
+                InlineKeyboardButton("⭐ 200", callback_data="star:200"),
+                InlineKeyboardButton("⭐ 300", callback_data="star:300"),
+            ],
+            [
+                InlineKeyboardButton("⭐ 400", callback_data="star:400"),
+                InlineKeyboardButton("⭐ 500", callback_data="star:500"),
+            ],
             [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
-        ]),
+        ])
     )
 
 
-async def show_profile(query):
-    user = query.from_user
-    username = f"@{user.username}" if user.username else "username yo'q"
-    await query.edit_message_text(
-        "👤 PROFIL\n\n"
-        f"ID: {user.id}\n"
-        f"Username: {username}\n"
-        f"Balans: {get_balance(user.id):,} so'm".replace(",", " "),
-        reply_markup=back_keyboard(),
+async def show_premium(target):
+    await target.edit_message_text(
+        "💎 PREMIUM\n\n"
+        "O'zingizga mos muddatni tanlang:",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("💎 1 OY • 45 000", callback_data="prem:0"),
+                InlineKeyboardButton("💎 3 OY • 164 000", callback_data="prem:1"),
+            ],
+            [
+                InlineKeyboardButton("💎 6 OY • 222 000", callback_data="prem:2"),
+                InlineKeyboardButton("💎 12 OY • 377 000", callback_data="prem:3"),
+            ],
+            [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
+        ])
     )
 
 
-async def show_help(query):
-    await query.edit_message_text(
-        "🔵 YORDAM\n\n"
-        "Savol yoki muammo bo'lsa operatorga yozing.\n\n"
-        f"👨‍💻 Operator: {ADMIN}\n"
-        "⏱ O'rtacha javob: 30 soniya",
-        reply_markup=back_keyboard(),
-    )
-
-
-async def show_info(query):
-    await query.edit_message_text(
-        "ℹ️ STARGIFT SHOP\n\n"
-        "⭐ Stars\n"
-        "🎁 Telegram Gifts\n"
-        "💎 Premium\n\n"
-        "⚡ Tezkor xizmat\n"
-        "🔐 Xavfsiz jarayon\n"
-        "💳 So'mda hisob-kitob\n\n"
-        "━━━━━━━━━━━━━━━━━━\n"
-        "SIFAT • TEZLIK • ISHONCH",
-        reply_markup=back_keyboard(),
-    )
-
-
-# ---------- GIFTS ----------
-async def show_gifts(query, bot):
-    try:
-        result = await bot.get_available_gifts()
-        gifts = result.gifts
-    except Exception:
-        await query.edit_message_text(
-            "🎁 GIFTS\n\n"
-            "Giftlar hozircha yuklanmadi.\n"
-            "Bir necha soniyadan keyin qayta urinib ko'ring.",
-            reply_markup=back_keyboard(),
-        )
-        return
-
-    if not gifts:
-        await query.edit_message_text(
-            "🎁 GIFTS\n\nHozircha mavjud Gift yo'q.",
-            reply_markup=back_keyboard(),
-        )
-        return
-
-    rows, row = [], []
-    for gift in gifts[:30]:
-        stars = gift.star_count
-        price = stars * STAR_PRICE
+async def show_topup(target):
+    rows = []
+    row = []
+    for amount in TOPUP:
         row.append(
             InlineKeyboardButton(
-                f"🎁 {stars}⭐ | {price:,}".replace(",", " "),
-                callback_data=f"gift_select:{gift.id}",
+                f"{amount:,} so'm".replace(",", " "),
+                callback_data=f"topup:{amount}"
             )
         )
         if len(row) == 2:
@@ -351,16 +242,138 @@ async def show_gifts(query, bot):
             row = []
     if row:
         rows.append(row)
+    rows.append([InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")])
 
-    rows.append([
-        InlineKeyboardButton("↩️ BOSH SAHIFA", callback_data="home")
-    ])
+    await target.edit_message_text(
+        "➕ HISOBNI TO'LDIRISH\n\n"
+        "Kerakli summani belgilang:",
+        reply_markup=InlineKeyboardMarkup(rows)
+    )
 
-    await query.edit_message_text(
-        "🎁 GIFTS\n\n"
-        "Kerakli Giftni tanlang.\n"
-        "Tanlanganda Giftning haqiqiy Telegram stickeri ko'rsatiladi.",
-        reply_markup=InlineKeyboardMarkup(rows),
+
+async def show_balance(target):
+    amount = get_balance(target.from_user.id)
+    await target.edit_message_text(
+        "💰 MENING BALANSIM\n\n"
+        f"Joriy mablag': {amount:,} so'm".replace(",", " "),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ HISOBNI TO'LDIRISH", callback_data="topup")],
+            [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
+        ])
+    )
+
+
+async def show_profile(target):
+    user = target.from_user
+    username = f"@{user.username}" if user.username else "ko'rsatilmagan"
+    await target.edit_message_text(
+        "👤 KABINETIM\n\n"
+        f"ID: {user.id}\n"
+        f"Username: {username}\n"
+        f"Balans: {get_balance(user.id):,} so'm".replace(",", " "),
+        reply_markup=back_inline()
+    )
+
+
+async def show_help(target):
+    await target.edit_message_text(
+        "🔵 KO'MAK MARKAZI\n\n"
+        f"Operator: {ADMIN}\n"
+        "⏱ O'rtacha javob vaqti: 30 soniya\n\n"
+        "Muammo bo'lsa, operatorga yozing.",
+        reply_markup=back_inline()
+    )
+
+
+async def show_info(target):
+    await target.edit_message_text(
+        "ℹ️ STARGIFT SHOP HAQIDA\n\n"
+        "⭐ Stars paketlari\n"
+        "🎁 Telegram sovg'alari\n"
+        "💎 Premium xizmatlari\n\n"
+        "⚡ Qulay foydalanish\n"
+        "🔐 Ishonchli jarayon\n"
+        "💳 So'mdagi hisob-kitob",
+        reply_markup=back_inline()
+    )
+
+
+async def show_orders(target):
+    user_id = target.from_user.id
+    con = db()
+    rows = con.execute(
+        "SELECT id,item,amount,status FROM orders "
+        "WHERE user_id=? ORDER BY id DESC LIMIT 20",
+        (user_id,)
+    ).fetchall()
+    con.close()
+
+    if not rows:
+        await target.edit_message_text(
+            "📦 BUYURTMALARIM\n\n"
+            "Hozircha bu bo'limda hech qanday buyurtma yo'q. 😊\n\n"
+            "Buyurtma berganingizdan keyin shu yerda ko'rinadi.",
+            reply_markup=back_inline()
+        )
+        return
+
+    lines = ["📦 BUYURTMALARIM\n"]
+    for oid, item, amount, status in rows:
+        lines.append(
+            f"№{oid} • {item}\n"
+            f"💳 {amount:,} so'm • 📌 {status}\n".replace(",", " ")
+        )
+
+    await target.edit_message_text(
+        "\n".join(lines),
+        reply_markup=back_inline()
+    )
+
+
+# ================= GIFTS =================
+async def show_gifts(target, bot):
+    try:
+        result = await bot.get_available_gifts()
+        gifts = result.gifts
+    except Exception:
+        await target.edit_message_text(
+            "🎁 SOVG'ALAR\n\n"
+            "Sovg'alar ro'yxatini yuklashda muammo bo'ldi.\n"
+            "Birozdan keyin yana urinib ko'ring.",
+            reply_markup=back_inline()
+        )
+        return
+
+    if not gifts:
+        await target.edit_message_text(
+            "🎁 SOVG'ALAR\n\nHozircha mavjud sovg'a topilmadi.",
+            reply_markup=back_inline()
+        )
+        return
+
+    rows = []
+    row = []
+    for gift in gifts[:30]:
+        stars = gift.star_count
+        price = stars * STAR_PRICE
+        row.append(
+            InlineKeyboardButton(
+                f"🎁 {stars}⭐ • {price:,}".replace(",", " "),
+                callback_data=f"gift:{gift.id}"
+            )
+        )
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")])
+
+    await target.edit_message_text(
+        "🎁 SOVG'ALAR\n\n"
+        "Sizga yoqqan sovg'ani tanlang.\n"
+        "Tanlanganda uning haqiqiy Telegram stickeri ko'rsatiladi.",
+        reply_markup=InlineKeyboardMarkup(rows)
     )
 
 
@@ -369,89 +382,67 @@ async def select_gift(query, gift_id, bot):
         result = await bot.get_available_gifts()
         gift = next(
             (g for g in result.gifts if str(g.id) == str(gift_id)),
-            None,
+            None
         )
         if gift is None:
             raise ValueError("Gift topilmadi")
 
         stars = gift.star_count
         price = stars * STAR_PRICE
-
-        # Gift rasmi/stickeri alohida xabar sifatida chiqadi.
-        await query.message.reply_sticker(gift.sticker.file_id)
-
         order_id = create_order(
             query.from_user.id,
-            f"Gift ({stars} Stars)",
-            price,
+            f"Sovg'a • {stars} Stars",
+            price
         )
 
+        await query.message.reply_sticker(gift.sticker.file_id)
         await query.message.reply_text(
-            "🎁 TANLANGAN GIFT\n\n"
+            "🎁 TANLANGAN SOVG'A\n\n"
             f"⭐ Qiymati: {stars} Stars\n"
             f"💳 Narxi: {price:,} so'm\n"
-            f"📦 Buyurtma: #{order_id}\n"
-            "⏱ O'rtacha: 30 soniya\n\n"
-            "To'lov integratsiyasi ulangach, tasdiqlash avtomatik ishlaydi."
-            .replace(",", " "),
+            f"📦 Buyurtma №{order_id}\n"
+            "⏱ O'rtacha: 30 soniya".replace(",", " "),
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎁 BOSHQA GIFT", callback_data="gift")],
+                [InlineKeyboardButton("🎁 YANA TANLASH", callback_data="gift")],
                 [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
-            ]),
+            ])
         )
-
     except Exception:
         await query.message.reply_text(
-            "❌ Giftni ochishda xatolik yuz berdi.\n"
-            "Qayta urinib ko'ring.",
-            reply_markup=back_keyboard(),
+            "❌ Sovg'ani ochishda xatolik yuz berdi.",
+            reply_markup=back_inline()
         )
 
 
-# ---------- CALLBACKS ----------
-async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================= CALLBACKS =================
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
     data = query.data
-    user_id = query.from_user.id
-    ensure_user(user_id)
 
     if data == "home":
         await query.edit_message_text(
-            "✨ STARGIFT SHOP ✨\n\n"
-            "Zamonaviy boshqaruv paneli.\n"
-            "Kerakli bo'limni tanlang:",
-            reply_markup=home_keyboard(),
+            "🌌 STARGIFT SHOP\n\n"
+            "Kerakli bo'limni tanlang.\n"
+            "Pastdagi doimiy menyu ham ochiq:",
+            reply_markup=home_inline()
         )
-
-    elif data == "services":
-        await show_services(query)
 
     elif data == "stars":
-        await query.edit_message_text(
-            "⭐ STARS\n\n"
-            f"1 Star = {STAR_PRICE} so'm\n"
-            "Paketni tanlang:",
-            reply_markup=stars_keyboard(),
-        )
+        await show_stars(query)
 
     elif data == "gift":
         await show_gifts(query, context.bot)
 
     elif data == "premium":
-        await query.edit_message_text(
-            "💎 PREMIUM\n\nMuddatni tanlang:",
-            reply_markup=premium_keyboard(),
-        )
+        await show_premium(query)
 
     elif data == "balance":
         await show_balance(query)
 
     elif data == "topup":
-        await query.edit_message_text(
-            "➕ HISOB TO'LDIRISH\n\nSummani tanlang:",
-            reply_markup=topup_keyboard(),
-        )
+        await show_topup(query)
 
     elif data == "orders":
         await show_orders(query)
@@ -468,168 +459,197 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("star:"):
         n = int(data.split(":")[1])
         amount = n * STAR_PRICE
-        order_id = create_order(user_id, f"{n} Stars", amount)
+        order_id = create_order(query.from_user.id, f"{n} Stars", amount)
+
         await query.edit_message_text(
-            "⭐ STARS BUYURTMASI\n\n"
-            f"📦 #{order_id}\n"
+            "⭐ YULDUZLAR BUYURTMASI\n\n"
+            f"📦 №{order_id}\n"
             f"⭐ {n} Stars\n"
             f"💳 {amount:,} so'm\n"
-            "📌 pending\n\n"
-            "To'lov integratsiyasi ulangach avtomatik tasdiqlanadi."
-            .replace(",", " "),
+            "📌 Holat: kutilmoqda".replace(",", " "),
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("⭐ BOSHQA PAKET", callback_data="stars")],
+                [InlineKeyboardButton("⭐ YANA TANLASH", callback_data="stars")],
                 [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
-            ]),
+            ])
         )
 
     elif data.startswith("prem:"):
         index = int(data.split(":")[1])
         name, amount = PREMIUM[index]
-        order_id = create_order(user_id, f"Premium {name}", amount)
+        order_id = create_order(
+            query.from_user.id,
+            f"Premium {name}",
+            amount
+        )
+
         await query.edit_message_text(
             "💎 PREMIUM BUYURTMASI\n\n"
-            f"📦 #{order_id}\n"
+            f"📦 №{order_id}\n"
             f"💎 Premium {name}\n"
             f"💳 {amount:,} so'm\n"
-            "📌 pending\n\n"
-            "To'lov integratsiyasi ulangach avtomatik tasdiqlanadi."
-            .replace(",", " "),
+            "📌 Holat: kutilmoqda".replace(",", " "),
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💎 BOSHQA MUDDAT", callback_data="premium")],
+                [InlineKeyboardButton("💎 YANA TANLASH", callback_data="premium")],
                 [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
-            ]),
+            ])
         )
 
     elif data.startswith("topup:"):
         amount = int(data.split(":")[1])
-        order_id = create_order(user_id, "Hisob to'ldirish", amount)
+        order_id = create_order(
+            query.from_user.id,
+            "Hisob to'ldirish",
+            amount
+        )
+
         await query.edit_message_text(
             "➕ HISOB TO'LDIRISH\n\n"
-            f"📦 #{order_id}\n"
+            f"📦 №{order_id}\n"
             f"💳 {amount:,} so'm\n"
-            "📌 pending\n\n"
-            "To'lov tizimi ulangach avtomatik tasdiqlanadi."
-            .replace(",", " "),
+            "📌 Holat: kutilmoqda".replace(",", " "),
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ YANA TO'LDIRISH", callback_data="topup")],
                 [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
-            ]),
+            ])
         )
 
-    elif data.startswith("gift_select:"):
-        gift_id = data.split(":", 1)[1]
-        await select_gift(query, gift_id, context.bot)
+    elif data.startswith("gift:"):
+        await select_gift(
+            query,
+            data.split(":", 1)[1],
+            context.bot
+        )
 
 
-# ---------- COMMANDS ----------
-async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await start(update, context)
+# ================= REPLY KEYBOARD BOSILGANDA =================
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (update.message.text or "").strip()
 
-
-async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "✨ STARGIFT SHOP\n\n"
-        "Bo'limlarni pastdagi bot menyusi orqali tanlang yoki /start bosing."
-    )
-
-
-# ---------- STARTUP ----------
-async def post_init(app: Application):
-    await app.bot.set_my_commands([
-        BotCommand("start", "Bosh sahifa"),
-        BotCommand("services", "Xizmatlar"),
-        BotCommand("balance", "Balans"),
-        BotCommand("orders", "Buyurtmalarim"),
-        BotCommand("help", "Yordam"),
-    ])
-    # Telegram chatida menyu belgisi doim mavjud bo'lishi uchun
-    # standart bot menu tugmasini Commands rejimiga o'tkazamiz.
-    await app.bot.set_chat_menu_button(
-        menu_button=MenuButtonCommands()
-    )
-
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    print("STARGIFT ERROR:", repr(context.error))
-
-
-def main():
-    if not TOKEN:
-        raise RuntimeError("BOT_TOKEN Railway Variables ichida topilmadi.")
-
-    db()
-
-    app = (
-        Application.builder()
-        .token(TOKEN)
-        .post_init(post_init)
-        .build()
-    )
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("services", show_services_command))
-    app.add_handler(CommandHandler("balance", balance_command))
-    app.add_handler(CommandHandler("orders", orders_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CallbackQueryHandler(callbacks))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
-    app.add_error_handler(error_handler)
-
-    print("STARGIFT SHOP — MODERN UI — RUNNING")
-    app.run_polling(drop_pending_updates=True)
-
-
-async def show_services_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🧩 XIZMATLAR\n\nBo'limni tanlang:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("⭐ STARS", callback_data="stars"),
-             InlineKeyboardButton("🎁 GIFTS", callback_data="gift")],
-            [InlineKeyboardButton("💎 PREMIUM", callback_data="premium")],
-        ])
-    )
-
-
-async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    ensure_user(update.effective_user.id)
-    await update.message.reply_text(
-        f"💰 BALANS\n\n{get_balance(update.effective_user.id):,} so'm".replace(",", " "),
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ HISOB TO'LDIRISH", callback_data="topup")],
-            [InlineKeyboardButton("⌂ BOSH SAHIFA", callback_data="home")],
-        ])
-    )
-
-
-async def orders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Command uchun CallbackQuery talab qilinmagani sabab alohida ko'rsatamiz.
-    user_id = update.effective_user.id
-    con = db()
-    rows = con.execute(
-        "SELECT id,item,amount,status FROM orders WHERE user_id=? ORDER BY id DESC LIMIT 20",
-        (user_id,),
-    ).fetchall()
-    con.close()
-    if not rows:
+    if text == "⭐ Yulduzlar":
         await update.message.reply_text(
-            "📦 BUYURTMALAR\n\nHozircha buyurtma yo'q."
+            "⭐ YULDUZLAR\n\nPaketni tanlang:",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("⭐ 25", callback_data="star:25"),
+                    InlineKeyboardButton("⭐ 50", callback_data="star:50"),
+                ],
+                [
+                    InlineKeyboardButton("⭐ 100", callback_data="star:100"),
+                    InlineKeyboardButton("⭐ 200", callback_data="star:200"),
+                ],
+                [
+                    InlineKeyboardButton("⭐ 500", callback_data="star:500"),
+                ],
+            ])
         )
-        return
-    text = ["📦 BUYURTMALAR\n"]
-    for oid, item, amount, status in rows:
-        text.append(f"▸ #{oid} {item} — {amount:,} so'm — {status}".replace(",", " "))
-    await update.message.reply_text("\n".join(text))
+
+    elif text == "🎁 Sovg'alar":
+        # Reply tugmasi bosilganda yangi xabar emas, bitta menyu ochiladi.
+        await update.message.reply_text(
+            "🎁 SOVG'ALAR\n\nSovg'alar ro'yxatini ochish uchun bosing:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎁 SOVG'ALARNI OCHISH", callback_data="gift")]
+            ])
+        )
+
+    elif text == "💎 Premium":
+        await update.message.reply_text(
+            "💎 PREMIUM\n\nMuddatni tanlang:",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("1 OY • 45 000", callback_data="prem:0"),
+                    InlineKeyboardButton("3 OY • 164 000", callback_data="prem:1"),
+                ],
+                [
+                    InlineKeyboardButton("6 OY • 222 000", callback_data="prem:2"),
+                    InlineKeyboardButton("12 OY • 377 000", callback_data="prem:3"),
+                ],
+            ])
+        )
+
+    elif text == "💰 Mening balansim":
+        await update.message.reply_text(
+            f"💰 MENING BALANSIM\n\n"
+            f"{get_balance(update.effective_user.id):,} so'm".replace(",", " "),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ HISOBNI TO'LDIRISH", callback_data="topup")]
+            ])
+        )
+
+    elif text == "➕ Hisobimni to'ldirish":
+        await update.message.reply_text(
+            "➕ HISOBNI TO'LDIRISH\n\nSummani tanlang:",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("10 000", callback_data="topup:10000"),
+                    InlineKeyboardButton("20 000", callback_data="topup:20000"),
+                ],
+                [
+                    InlineKeyboardButton("50 000", callback_data="topup:50000"),
+                    InlineKeyboardButton("100 000", callback_data="topup:100000"),
+                ],
+                [
+                    InlineKeyboardButton("200 000", callback_data="topup:200000"),
+                    InlineKeyboardButton("500 000", callback_data="topup:500000"),
+                ],
+            ])
+        )
+
+    elif text == "📦 Buyurtmalarim":
+        user_id = update.effective_user.id
+        con = db()
+        rows = con.execute(
+            "SELECT id,item,amount,status FROM orders "
+            "WHERE user_id=? ORDER BY id DESC LIMIT 20",
+            (user_id,)
+        ).fetchall()
+        con.close()
+
+        if not rows:
+            await update.message.reply_text(
+                "📦 BUYURTMALARIM\n\n"
+                "Hozircha hech qanday buyurtma yo'q. 😊"
+            )
+        else:
+            lines = ["📦 BUYURTMALARIM\n"]
+            for oid, item, amount, status in rows:
+                lines.append(
+                    f"№{oid} • {item}\n"
+                    f"💳 {amount:,} so'm • 📌 {status}\n".replace(",", " ")
+                )
+            await update.message.reply_text("\n".join(lines))
+
+    elif text == "👤 Kabinetim":
+        user = update.effective_user
+        username = f"@{user.username}" if user.username else "ko'rsatilmagan"
+        await update.message.reply_text(
+            "👤 KABINETIM\n\n"
+            f"ID: {user.id}\n"
+            f"Username: {username}\n"
+            f"Balans: {get_balance(user.id):,} so'm".replace(",", " ")
+        )
+
+    elif text == "🔵 Ko'mak":
+        await update.message.reply_text(
+            "🔵 KO'MAK\n\n"
+            f"Operator: {ADMIN}\n"
+            "⏱ O'rtacha javob: 30 soniya"
+        )
+
+    elif text == "ℹ️ Biz haqimizda":
+        await update.message.reply_text(
+            "ℹ️ STARGIFT SHOP\n\n"
+            "⭐ Stars • 🎁 Sovg'alar • 💎 Premium\n"
+            "⚡ Tezkor • 🔐 Ishonchli • 💳 So'm"
+        )
+
+    else:
+        await update.message.reply_text(
+            "🌌 STARGIFT SHOP\n\n"
+            "Pastdagi menyudan kerakli bo'limni tanlang.",
+            reply_markup=main_keyboard()
+        )
 
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔵 YORDAM\n\n"
-        f"Operator: {ADMIN}\n"
-        "⏱ O'rtacha javob: 30 soniya"
-    )
-
-
-if __name__ == "__main__":
-    main()
-    
+# ================= COMMANDS =================
+async def 
